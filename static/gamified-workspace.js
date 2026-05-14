@@ -196,44 +196,68 @@ class GamifiedWorkspace {
     const mapRect = workspaceMap.getBoundingClientRect();
     const mapWidth = mapRect.width;
     const mapHeight = mapRect.height;
+    const isMobile = window.innerWidth <= 767;
 
     // Position agents directly in workspace-map based on their zone
-    // with small random offsets inside room boundaries
-    
-    const zonePositions = {
-      engineering: { 
-        baseX: 80 + 50, // room left + offset from wall
-        baseY: 80 + 60, // room top + header + offset
-        maxX: 80 + 340 - 50, // room left + width - offset
-        maxY: 80 + 260 - 50  // room top + height - offset
-      },
-      research: { 
-        baseX: Math.max(mapWidth - 80 - 340 + 50, 450), // right side
-        baseY: 80 + 60,
-        maxX: Math.max(mapWidth - 80 - 50, 500),
-        maxY: 80 + 260 - 50
-      },
-      operations: { 
-        baseX: 80 + 50,
-        baseY: Math.max(mapHeight - 200 - 260 + 60, 400), // bottom side
-        maxX: 80 + 340 - 50,
-        maxY: Math.max(mapHeight - 200 - 50, 450)
-      },
-      meeting: { 
-        baseX: Math.max(mapWidth - 80 - 340 + 50, 450),
-        baseY: Math.max(mapHeight - 200 - 260 + 60, 400),
-        maxX: Math.max(mapWidth - 80 - 50, 500),
-        maxY: Math.max(mapHeight - 200 - 50, 450)
-      },
-      lounge: { 
-        baseX: Math.max((mapWidth / 2) - 210 + 50, 150), // center - half width + offset
-        baseY: Math.max(mapHeight - 80 - 120 + 40, 500),
-        maxX: Math.max((mapWidth / 2) + 210 - 50, 300),
-        maxY: Math.max(mapHeight - 80 - 40, 550)
-      }
-    };
+    // with small random offsets inside room boundaries.
+    //
+    // Two layout modes:
+    //   - Mobile: percentage-based floor plan (matches the .workspace-zone
+    //             rules: 5% margins, 40%x40% corner rooms, 20% lounge).
+    //   - Desktop: fixed-pixel layout (existing behaviour).
+    let zonePos;
+    if (isMobile) {
+      const rooms = {
+        engineering: { x: 0.05, y: 0.05, w: 0.40, h: 0.40 },
+        research:    { x: 0.55, y: 0.05, w: 0.40, h: 0.40 },
+        operations:  { x: 0.05, y: 0.55, w: 0.40, h: 0.40 },
+        meeting:     { x: 0.55, y: 0.55, w: 0.40, h: 0.40 },
+        lounge:      { x: 0.40, y: 0.40, w: 0.20, h: 0.20 },
+      };
+      const r = rooms[agent.zone] || rooms.operations;
+      const pad = 12; // keep sprites away from the wall
+      zonePos = {
+        baseX: r.x * mapWidth + pad,
+        baseY: r.y * mapHeight + pad,
+        maxX: (r.x + r.w) * mapWidth - pad,
+        maxY: (r.y + r.h) * mapHeight - pad,
+      };
+    } else {
+      const zonePositions = {
+        engineering: {
+          baseX: 80 + 50,
+          baseY: 80 + 60,
+          maxX: 80 + 340 - 50,
+          maxY: 80 + 260 - 50,
+        },
+        research: {
+          baseX: Math.max(mapWidth - 80 - 340 + 50, 450),
+          baseY: 80 + 60,
+          maxX: Math.max(mapWidth - 80 - 50, 500),
+          maxY: 80 + 260 - 50,
+        },
+        operations: {
+          baseX: 80 + 50,
+          baseY: Math.max(mapHeight - 200 - 260 + 60, 400),
+          maxX: 80 + 340 - 50,
+          maxY: Math.max(mapHeight - 200 - 50, 450),
+        },
+        meeting: {
+          baseX: Math.max(mapWidth - 80 - 340 + 50, 450),
+          baseY: Math.max(mapHeight - 200 - 260 + 60, 400),
+          maxX: Math.max(mapWidth - 80 - 50, 500),
+          maxY: Math.max(mapHeight - 200 - 50, 450),
+        },
+        lounge: {
+          baseX: Math.max((mapWidth / 2) - 210 + 50, 150),
+          baseY: Math.max(mapHeight - 80 - 120 + 40, 500),
+          maxX: Math.max((mapWidth / 2) + 210 - 50, 300),
+          maxY: Math.max(mapHeight - 80 - 40, 550),
+        },
+      };
+      zonePos = zonePositions[agent.zone];
+    }
 
-    const zonePos = zonePositions[agent.zone];
     if (!zonePos) {
       console.warn(`No position defined for zone: ${agent.zone}`);
       return;
@@ -242,14 +266,15 @@ class GamifiedWorkspace {
     // Add small random offset within room boundaries (±20px)
     const randomOffsetX = (Math.random() - 0.5) * 40; // -20 to +20
     const randomOffsetY = (Math.random() - 0.5) * 40; // -20 to +20
-    
+
     // Calculate final position
     let finalX = zonePos.baseX + randomOffsetX;
     let finalY = zonePos.baseY + randomOffsetY;
-    
+
     // Ensure agent stays within room boundaries
-    finalX = Math.max(zonePos.baseX, Math.min(finalX, zonePos.maxX - 32));
-    finalY = Math.max(zonePos.baseY, Math.min(finalY, zonePos.maxY - 32));
+    const size = isMobile ? 28 : 32;
+    finalX = Math.max(zonePos.baseX, Math.min(finalX, zonePos.maxX - size));
+    finalY = Math.max(zonePos.baseY, Math.min(finalY, zonePos.maxY - size));
 
     // Apply positioning with CSS attributes for sprite rendering
     agentElement.style.position = 'absolute';
@@ -264,7 +289,7 @@ class GamifiedWorkspace {
   createAgentElement(agent) {
     const agentDiv = document.createElement('div');
     agentDiv.className = `workspace-agent ${agent.role} status-${agent.status}`;
-    
+
     // Use sprite-based rendering - text will be hidden by CSS for sprite roles
     const avatarText = this.getAgentAvatar(agent);
     agentDiv.textContent = avatarText;
@@ -272,6 +297,9 @@ class GamifiedWorkspace {
     agentDiv.dataset.agentId = agent.id;
     agentDiv.dataset.name = agent.name; // For label display
     agentDiv.dataset.zone = agent.zone; // For CSS positioning
+    // data-role drives sprite lookup in gamified-workspace.css (mobile),
+    // so the same role string used as a class is also stamped here.
+    agentDiv.dataset.role = agent.role;
     agentDiv.tabIndex = 0; // Make keyboard accessible
 
     // Event handlers

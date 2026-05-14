@@ -667,6 +667,17 @@ function mapStatusToZone(status) {
     return 'zone-operations';
 }
 
+// Map an agent role/name to one of the 4 sprite roles (dev/research/ops/manager).
+function mapRoleToSprite(agent) {
+    const role = (agent.role || '').toLowerCase();
+    const id = (agent.id || '').toLowerCase();
+    if (role === 'developer' || id.startsWith('developer')) return 'dev';
+    if (role === 'researcher' || role === 'analyst') return 'research';
+    if (role === 'devops' || role === 'security') return 'ops';
+    if (role === 'coordinator' || role === 'manager') return 'manager';
+    return 'dev';
+}
+
 function renderAgents(agents) {
     const map = document.getElementById('workspace-map');
     if (!map || !Array.isArray(agents)) return;
@@ -687,19 +698,30 @@ function renderAgents(agents) {
         const zoneRect = zone.getBoundingClientRect();
 
         list.forEach((agent, i) => {
-            let el = document.querySelector(`[data-id="${agent.id}"]`);
+            let el = document.querySelector(`.agent[data-id="${agent.id}"]`);
             if (!el) {
                 el = document.createElement('div');
                 el.className = 'agent';
                 el.dataset.id = agent.id;
+                el.dataset.role = mapRoleToSprite(agent);
                 el.title = `${agent.name} - ${agent.currentTask || ''}`;
+                // Render directly inside the workspace map (NOT inside a room
+                // div) so movement transitions can carry the sprite smoothly
+                // from one room's coordinates to another's.
                 map.appendChild(el);
             }
 
-            const agentSize = el.offsetWidth || 22;
+            // Keep status class in sync so CSS can react (idle/busy pulse).
+            const status = (agent.status || 'online').toLowerCase();
+            el.className = `agent status-${status}`;
+            el.dataset.role = mapRoleToSprite(agent);
+            el.title = `${agent.name} - ${agent.currentTask || ''}`;
+
+            const agentSize = el.offsetWidth || 28;
             const half = agentSize / 2;
 
-            // Spread agents in a small grid inside the zone (max 3 per row).
+            // Spread agents in a small grid inside the zone (max 3 per row),
+            // and add a tiny ±20px jitter so they look natural - not lined up.
             const cols = Math.min(list.length, 3);
             const col = i % cols;
             const row = Math.floor(i / cols);
@@ -708,13 +730,28 @@ function renderAgents(agents) {
 
             const offsetX = (col + 1) * cellW - zoneRect.width / 2;
             const offsetY = row * cellH;
+            const jitterX = (Math.random() - 0.5) * 40; // +/- 20 px
+            const jitterY = (Math.random() - 0.5) * 40;
 
-            const relativeX = zoneRect.left - mapRect.left + (zoneRect.width / 2) + offsetX - half;
-            const relativeY = zoneRect.top - mapRect.top + (zoneRect.height / 2) + offsetY - half;
+            const relativeX = zoneRect.left - mapRect.left + (zoneRect.width / 2) + offsetX + jitterX - half;
+            const relativeY = zoneRect.top - mapRect.top + (zoneRect.height / 2) + offsetY + jitterY - half;
 
-            el.style.left = relativeX + 'px';
-            el.style.top = relativeY + 'px';
+            // Clamp inside the room walls so the sprite never overlaps the
+            // border outline.
+            const minX = zoneRect.left - mapRect.left + 4;
+            const maxX = zoneRect.left - mapRect.left + zoneRect.width - agentSize - 4;
+            const minY = zoneRect.top - mapRect.top + 4;
+            const maxY = zoneRect.top - mapRect.top + zoneRect.height - agentSize - 4;
+
+            el.style.left = Math.max(minX, Math.min(maxX, relativeX)) + 'px';
+            el.style.top = Math.max(minY, Math.min(maxY, relativeY)) + 'px';
         });
+    });
+
+    // Drop any sprite whose agent no longer exists.
+    const liveIds = new Set(agents.map(a => a.id));
+    map.querySelectorAll('.agent').forEach(el => {
+        if (!liveIds.has(el.dataset.id)) el.remove();
     });
 }
 

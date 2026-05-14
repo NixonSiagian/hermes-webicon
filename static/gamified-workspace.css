@@ -217,15 +217,6 @@
   pointer-events: none;
   z-index: 1;
 }
-  border-color: var(--color-pink);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(236, 72, 153, 0.08) 100%);
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.1),
-    0 0 20px rgba(236, 72, 153, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
 
 /* ===== ZONE HEADERS ===== */
 .zone-header {
@@ -953,100 +944,82 @@
   .sidebar {
     display: none;
   }
-  
-  /* Ensure main content uses full width */
+
+  /* Ensure main content uses full width: shrink the rail to 0 so the
+     office panel can become a true full-screen canvas. */
   .layout {
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: 0 1fr;
   }
-  
-  .workspace-2d-container {
+  .rail { display: none !important; }
+
+  /* The office panel is the dashboard's "workspace map". On mobile it
+     becomes a fixed full-screen canvas under the navbar (60px). */
+  #panelOffice .workspace-2d-container,
+  #panelOffice #workspaceMap {
+    background: #0b0f1a;
+  }
+  #panelOffice .workspace-2d-container {
     min-height: calc(100vh - 60px);
-    overflow-x: auto;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
+  #panelOffice #workspaceMap,
   .workspace-map {
-    /* Enable horizontal scrolling */
-    overflow-x: auto;
-    min-width: 100%;
-    min-height: calc(100vh - 80px);
-    padding: var(--space-4);
-    /* Scale down on mobile */
-    transform: scale(0.85);
+    /* Reset any earlier zoom/scale and let the absolute room layout fill
+       the viewport. NO transform:scale and NO fixed pixel widths -
+       percentages do all the work. */
+    transform: none !important;
     transform-origin: top left;
-    /* Ensure map is wide enough for scaled content */
-    width: calc(100% / 0.85);
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: calc(100vh - 60px);
+    min-height: calc(100vh - 60px);
+    min-width: 0;
+    overflow: hidden;
+    background: #0b0f1a;
   }
 
-  /* Mobile: Adjust room positions for scaled view */
+  /* Floor-plan: 4 corners + centred lounge. Percentages only. */
   .workspace-zone.engineering {
-    top: 40px;
-    left: 40px;
-    width: 260px;
-    height: 180px;
+    top: 5%;  left: 5%;  right: auto;
+    width: 40%; height: 40%;
+    border: 3px solid #2a2f45;
   }
-
   .workspace-zone.research {
-    top: 40px;
-    right: 40px;
-    left: auto;
-    width: 260px;
-    height: 180px;
+    top: 5%;  right: 5%; left: auto;
+    width: 40%; height: 40%;
+    border: 3px solid #2a2f45;
   }
-
   .workspace-zone.operations {
-    bottom: 140px;
-    left: 40px;
-    width: 260px;
-    height: 180px;
+    bottom: 5%; left: 5%;
+    width: 40%; height: 40%;
+    border: 3px solid #2a2f45;
   }
-
   .workspace-zone.meeting {
-    bottom: 140px;
-    right: 40px;
-    left: auto;
-    width: 260px;
-    height: 180px;
+    bottom: 5%; right: 5%; left: auto;
+    width: 40%; height: 40%;
+    border: 3px solid #2a2f45;
   }
-
   .workspace-zone.lounge {
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 320px;
-    height: 80px;
+    top: 40%;  left: 40%; right: auto; bottom: auto;
+    width: 20%; height: 20%;
+    transform: none;
+    border: 3px solid #2a2f45;
   }
 
-  /* Mobile agent positioning - update CSS selectors */
-  .workspace-agent[data-zone="engineering"] {
-    top: calc(40px + 40px + 20px) !important;
-    left: calc(40px + 40px + 20px) !important;
-  }
-
-  .workspace-agent[data-zone="research"] {
-    top: calc(40px + 40px + 30px) !important;
-    right: calc(40px + 40px + 30px) !important;
-    left: auto !important;
-  }
-
-  .workspace-agent[data-zone="operations"] {
-    bottom: calc(140px + 40px + 40px) !important;
-    left: calc(40px + 50px + 20px) !important;
-    top: auto !important;
-  }
-
-  .workspace-agent[data-zone="meeting"] {
-    bottom: calc(140px + 40px + 50px) !important;
-    right: calc(40px + 50px + 40px) !important;
-    left: auto !important;
-    top: auto !important;
-  }
-
+  /* Reset percentage-based agent positions that the older fixed-px rules
+     were forcing. The JS positions sprites; CSS just sizes them. */
+  .workspace-agent[data-zone="engineering"],
+  .workspace-agent[data-zone="research"],
+  .workspace-agent[data-zone="operations"],
+  .workspace-agent[data-zone="meeting"],
   .workspace-agent[data-zone="lounge"] {
-    bottom: calc(30px + 30px + 15px) !important;
-    left: 50% !important;
-    transform: translateX(-50%) translateX(20px) !important;
     top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
   }
 
   /* Mobile workspace controls */
@@ -1082,17 +1055,32 @@
     gap: var(--space-3);
   }
 
+  /* Sprite-based agents: replace the round gradient badge with a
+     transparent square that takes a real PNG sprite. */
   .workspace-agent {
     width: 28px;
     height: 28px;
-    font-size: 10px;
+    background: transparent !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: transparent;
+    text-indent: -9999px;
+    animation: none !important;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
   }
 
-  .workspace-agent::before {
-    width: 12px;
-    height: 12px;
-    border-width: 2px;
-  }
+  .workspace-agent::before { display: none !important; content: none !important; }
+
+  .workspace-agent[data-role="developer"]   { background-image: url('assets/agents/dev.png') !important; }
+  .workspace-agent[data-role="researcher"]  { background-image: url('assets/agents/research.png') !important; }
+  .workspace-agent[data-role="analyst"]     { background-image: url('assets/agents/research.png') !important; }
+  .workspace-agent[data-role="devops"]      { background-image: url('assets/agents/ops.png') !important; }
+  .workspace-agent[data-role="security"]    { background-image: url('assets/agents/ops.png') !important; }
+  .workspace-agent[data-role="coordinator"] { background-image: url('assets/agents/manager.png') !important; }
 
   /* Simplified furniture on mobile */
   .zone-furniture > * {
@@ -1100,20 +1088,16 @@
     transform: scale(0.8);
   }
 
-  /* Prevent zone transforms on mobile */
+  /* Prevent zone hover transforms on mobile. */
   .workspace-zone:hover {
-    transform: translateY(-1px) scale(1.005);
-  }
-
-  .workspace-zone.lounge:hover {
-    transform: translateX(-50%) translateY(-1px) scale(1.005);
+    transform: none;
   }
 }
 
 @media (max-width: 480px) {
   .workspace-map {
-    padding: var(--space-3);
-    min-height: calc(100vh - 120px);
+    padding: 0;
+    min-height: calc(100vh - 60px);
   }
 
   .zone-header {
@@ -1127,9 +1111,8 @@
   .workspace-agent {
     width: 26px;
     height: 26px;
-    font-size: 9px;
-    min-width: 40px;
-    min-height: 40px;
+    /* Keep min-* to ensure tappable target with the surrounding hit-area
+       padding on the agent info container, not the visual sprite. */
   }
 
   .agent-info-header {
@@ -1157,12 +1140,8 @@
     display: none;
   }
 
-  /* Ensure rooms don't overlap on small screens */
-  .workspace-zone.engineering { top: 20px; }
-  .workspace-zone.research { top: 180px; }
-  .workspace-zone.operations { top: 340px; }
-  .workspace-zone.meeting { top: 500px; }
-  .workspace-zone.lounge { top: 660px; }
+  /* Floor plan at 480px is the same percentage layout. No fixed-pixel
+     overrides here so rooms keep their proportions. */
 }
 
 /* ===== ACCESSIBILITY ENHANCEMENTS ===== */
