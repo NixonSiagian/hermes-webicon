@@ -65,11 +65,9 @@
     50% { opacity: 0.5; }
   }
 
-  /* Canvas container */
+  /* Canvas container — PixiJS manages canvas size; we only ensure block display */
   .canvas-container canvas {
     display: block;
-    width: 100% !important;
-    height: 100% !important;
   }
 }
 

@@ -9,19 +9,20 @@ import AgentPopup from './components/AgentPopup';
 import { useWorkspaceStore } from './store/workspaceStore';
 
 /**
- * Hermes 2D AI Agent Workspace — RimWorld Style
+ * App — Root shell.
  *
- * A live tile-based 2D office simulation where AI agents move
- * autonomously inside rooms with real floor tiles, walls, and furniture.
+ * Layout:
+ *   ┌──────────────────────────────────┐
+ *   │  Navbar (fixed, h-14 = 56px)     │
+ *   ├──────────────────────────────────┤
+ *   │  Main content (fills rest)       │
+ *   │  — WorkspaceView has its own     │
+ *   │    top-bar + PixiJS canvas that  │
+ *   │    fills 100% of this area       │
+ *   └──────────────────────────────────┘
  *
- * Architecture:
- * - PixiJS canvas with tile-based rendering
- * - Procedural floor/wall/furniture textures
- * - Zustand for state management
- * - Autonomous movement system with lerp interpolation
- * - Pixel-art animated agent sprites
- * - Depth-sorted rendering (Y-sorting like RimWorld)
- * - Mobile-first responsive design with touch pan/zoom
+ * The key fix: main uses calc(100vh - 56px) so the canvas
+ * always has a real pixel height to measure.
  */
 export default function App() {
   const [activeView, setActiveView] = useState('workspace');
@@ -29,35 +30,39 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'workspace':
-        return <WorkspaceView />;
-      case 'agents':
-        return <AgentPanel />;
-      case 'tasks':
-        return <TasksPanel />;
-      case 'settings':
-        return <SettingsPanel />;
-      default:
-        return <WorkspaceView />;
+      case 'workspace': return <WorkspaceView />;
+      case 'agents':    return <AgentPanel />;
+      case 'tasks':     return <TasksPanel />;
+      case 'settings':  return <SettingsPanel />;
+      default:          return <WorkspaceView />;
     }
   };
 
   return (
-    <div className="w-full h-full bg-[#050810]">
-      {/* Navbar */}
+    <div style={{ width: '100%', height: '100%', background: '#050810', overflow: 'hidden' }}>
+      {/* Fixed top navbar */}
       <Navbar activeView={activeView} onViewChange={setActiveView} />
 
-      {/* Main content */}
+      {/* Main content area — sits below the 56px navbar */}
       {!isFullscreen && (
-        <main className="absolute top-14 left-0 right-0 bottom-0 overflow-hidden">
+        <main style={{
+          position: 'absolute',
+          top: 56,           /* exactly navbar height */
+          left: 0,
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
           {renderView()}
         </main>
       )}
 
-      {/* Fullscreen workspace overlay */}
+      {/* Fullscreen overlay (replaces everything) */}
       <FullscreenWorkspace />
 
-      {/* Agent info popup */}
+      {/* Agent click popup */}
       <AgentPopup />
     </div>
   );

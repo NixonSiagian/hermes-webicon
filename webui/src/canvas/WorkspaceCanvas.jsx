@@ -3,233 +3,251 @@ import * as PIXI from 'pixi.js';
 import { useWorkspaceStore, MAP_WIDTH, MAP_HEIGHT } from '../store/workspaceStore';
 import { renderTileMap, renderRoomLabels } from '../systems/tileRenderer';
 import { renderFurniture } from '../systems/furnitureRenderer';
-import { updateSimulation, getSimulationStats } from '../systems/simulationEngine';
+import { updateSimulation } from '../systems/simulationEngine';
 import { createAgentVisual, updateAgentVisual, destroyAgentVisual } from '../systems/agentSystem';
 
 /**
- * Main 2D Workspace Canvas — Real Agent Simulation
- * 
- * This is a LIVING simulation where agents:
- * - Pick jobs based on their role
- * - Move to the correct room
- * - Work at specific workstations
- * - Complete tasks and pick new ones
- * - Attend meetings, take breaks
- * 
- * NOT a static demo. Agents behave autonomously.
+ * WorkspaceCanvas — Fullscreen PixiJS 2D Agent Simulation
+ *
+ * Layer hierarchy:
+ *   stage
+ *     └── worldContainer  (camera target: pan + zoom)
+ *           ├── mapLayer       (tilemap + room labels)
+ *           ├── furnitureLayer (desks, chairs, etc.)
+ *           ├── agentLayer     (characters, depth-sorted)
+ *           └── debugLayer     (reserved for dev overlays)
+ *
+ * Fixes applied vs previous version:
+ *  1. PIXI.Application uses explicit width/height from the wrapper div — NOT resizeTo
+ *     (resizeTo was reading 0 because the canvas hadn't been appended yet).
+ *  2. Canvas element is absolutely positioned and fills 100% of the wrapper.
+ *  3. centerWorld() is called AFTER the canvas is in the DOM via requestAnimationFrame.
+ *  4. ResizeObserver watches the wrapper div for precise size changes.
+ *  5. Mobile: pinch-to-zoom on the canvas itself (not the window).
+ *  6. Zoom buttons write directly to worldRef without going through React state.
  */
 export default function WorkspaceCanvas() {
-  const canvasRef = useRef(null);
-  const appRef = useRef(null);
-  const agentVisualsRef = useRef({});
-  const worldRef = useRef(null);
-  const agentLayerRef = useRef(null);
-  const lastTimeRef = useRef(0);
-  const agentsLocalRef = useRef([]);
-  const statsCallbackRef = useRef(null);
+  const wrapperRef   = useRef(null); // outer div — size source of truth
+  const appRef       = useRef(null);
+  const worldRef     = useRef(null);
+  const agentVisualsRef  = useRef({});
+  const agentLayerRef    = useRef(null);
+  const agentsLocalRef   = useRef([]);
+  const lastTimeRef      = useRef(0);
 
-  const { tileMap, rooms, agents, setSelectedAgent, simulationRunning, simulationSpeed } = useWorkspaceStore();
+  // Pan state
+  const isPanning        = useRef(false);
+  const lastPanPos       = useRef({ x: 0, y: 0 });
+  const lastPinchDist    = useRef(0);
 
-  // Initialize PixiJS application and render world
+  const { tileMap, rooms, agents, setSelectedAgent } = useWorkspaceStore();
+
+  // ─────────────────────────────────────────────────────────────
+  // INIT PIXI
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!canvasRef.current || appRef.current) return;
+    if (!wrapperRef.current || appRef.current) return;
 
+    const wrapper = wrapperRef.current;
+    const W = wrapper.clientWidth  || window.innerWidth;
+    const H = wrapper.clientHeight || window.innerHeight;
+
+    // Create app with EXPLICIT size — avoids the resizeTo-before-DOM-append bug
     const app = new PIXI.Application({
-      background: 0x050810,
-      resizeTo: canvasRef.current,
-      antialias: false,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
+      width:         W,
+      height:        H,
+      background:    0x050810,
+      antialias:     false,
+      resolution:    Math.min(window.devicePixelRatio || 1, 2),
+      autoDensity:   true,
+      powerPreference: 'high-performance',
     });
 
-    canvasRef.current.appendChild(app.view);
+    // Style the canvas to fill wrapper absolutely
+    const canvas = app.view;
+    canvas.style.position = 'absolute';
+    canvas.style.top      = '0';
+    canvas.style.left     = '0';
+    canvas.style.width    = '100%';
+    canvas.style.height   = '100%';
+    canvas.style.display  = 'block';
+    wrapper.appendChild(canvas);
     appRef.current = app;
 
-    // World container (camera target)
-    const world = new PIXI.Container();
-    world.sortableChildren = true;
-    app.stage.addChild(world);
-    worldRef.current = world;
+    // ── Build layer hierarchy ──────────────────────────────────
+    const worldContainer = new PIXI.Container();
+    worldContainer.sortableChildren = true;
+    app.stage.addChild(worldContainer);
+    worldRef.current = worldContainer;
 
-    // === LAYER 1: Tilemap (floor + walls) ===
+    // Layer 1 — Tilemap (rendered once to RenderTexture)
+    const mapLayer = new PIXI.Container();
+    mapLayer.zIndex = 0;
     const tileMapSprite = renderTileMap(app, tileMap);
-    world.addChild(tileMapSprite);
-
-    // === LAYER 2: Room labels ===
+    mapLayer.addChild(tileMapSprite);
     const labelsContainer = renderRoomLabels(app);
-    world.addChild(labelsContainer);
+    mapLayer.addChild(labelsContainer);
+    worldContainer.addChild(mapLayer);
 
-    // === LAYER 3: Furniture ===
-    const furnitureContainer = renderFurniture(app);
-    world.addChild(furnitureContainer);
+    // Layer 2 — Furniture (depth-sorted by Y)
+    const furnitureLayer = renderFurniture(app);
+    furnitureLayer.zIndex = 10;
+    worldContainer.addChild(furnitureLayer);
 
-    // === LAYER 4: Agents (depth-sorted) ===
+    // Layer 3 — Agents (depth-sorted by Y)
     const agentLayer = new PIXI.Container();
     agentLayer.sortableChildren = true;
-    agentLayer.zIndex = 50;
-    world.addChild(agentLayer);
+    agentLayer.zIndex = 20;
+    worldContainer.addChild(agentLayer);
     agentLayerRef.current = agentLayer;
 
-    // Create agent visuals
+    // Layer 4 — Vignette / debug overlay
+    const debugLayer = createVignette();
+    debugLayer.zIndex = 200;
+    worldContainer.addChild(debugLayer);
+
+    // ── Spawn agent visuals ────────────────────────────────────
     const visuals = {};
     agents.forEach((agent) => {
       const visual = createAgentVisual(app, agent);
-      visual.container.on('pointertap', () => {
-        setSelectedAgent(agent);
-      });
+      visual.container.on('pointertap', () => setSelectedAgent(agent));
       agentLayer.addChild(visual.container);
       visuals[agent.id] = visual;
     });
     agentVisualsRef.current = visuals;
-
-    // Initialize local agents copy for simulation
     agentsLocalRef.current = agents.map((a) => ({ ...a }));
 
-    // === LAYER 5: Ambient overlay (vignette) ===
-    const vignette = createVignette();
-    vignette.zIndex = 200;
-    world.addChild(vignette);
-
-    // === GAME LOOP — The heart of the simulation ===
+    // ── Game loop ──────────────────────────────────────────────
     lastTimeRef.current = performance.now();
+
     app.ticker.add(() => {
-      const now = performance.now();
-      const rawDt = Math.min((now - lastTimeRef.current) / 1000, 0.1);
+      const now    = performance.now();
+      const rawDt  = Math.min((now - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = now;
 
-      // Apply simulation speed
-      const running = useWorkspaceStore.getState().simulationRunning;
-      const speed = useWorkspaceStore.getState().simulationSpeed;
-      if (!running) return;
-      
-      const dt = rawDt * speed;
+      const { simulationRunning, simulationSpeed } = useWorkspaceStore.getState();
+      if (!simulationRunning) return;
 
-      // === SIMULATION TICK ===
+      const dt = rawDt * simulationSpeed;
+
       agentsLocalRef.current = updateSimulation(agentsLocalRef.current, rooms, dt);
 
-      // === UPDATE VISUALS ===
       agentsLocalRef.current.forEach((agent) => {
         const visual = agentVisualsRef.current[agent.id];
-        if (visual) {
-          updateAgentVisual(visual, agent, dt);
-        }
+        if (visual) updateAgentVisual(visual, agent, dt);
       });
-
-      // Update stats in store periodically (every ~30 frames)
-      if (Math.random() < 0.033) {
-        const stats = getSimulationStats(agentsLocalRef.current);
-        if (statsCallbackRef.current) {
-          statsCallbackRef.current(stats);
-        }
-      }
     });
 
-    // === RESIZE HANDLER ===
-    const handleResize = () => {
-      if (app.renderer && canvasRef.current) {
-        app.renderer.resize(
-          canvasRef.current.clientWidth,
-          canvasRef.current.clientHeight
-        );
-        centerWorld(world, canvasRef.current);
-      }
-    };
+    // ── Auto-fit camera AFTER canvas is in DOM ─────────────────
+    // Double-rAF ensures the browser has laid out the wrapper
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fitWorld(worldContainer, wrapper);
+      });
+    });
 
-    window.addEventListener('resize', handleResize);
-    setTimeout(() => centerWorld(world, canvasRef.current), 60);
+    // ── ResizeObserver for fluid responsiveness ────────────────
+    const ro = new ResizeObserver(() => {
+      if (!app.renderer) return;
+      const nW = wrapper.clientWidth;
+      const nH = wrapper.clientHeight;
+      app.renderer.resize(nW, nH);
+      fitWorld(worldContainer, wrapper);
+    });
+    ro.observe(wrapper);
+
+    // ── Zoom button events from UI overlay ────────────────────
+    const onZoomEvent = (e) => {
+      const rect = wrapper.getBoundingClientRect();
+      applyZoom(
+        worldContainer,
+        rect.width  / 2,
+        rect.height / 2,
+        e.detail.factor,
+      );
+    };
+    const onZoomFit = () => fitWorld(worldContainer, wrapper);
+    window.addEventListener('hermes:zoom',     onZoomEvent);
+    window.addEventListener('hermes:zoom:fit', onZoomFit);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      ro.disconnect();
+      window.removeEventListener('hermes:zoom',     onZoomEvent);
+      window.removeEventListener('hermes:zoom:fit', onZoomFit);
       Object.values(agentVisualsRef.current).forEach(destroyAgentVisual);
       app.destroy(true, { children: true });
       appRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync external state changes into local sim
-  useEffect(() => {
-    agents.forEach((storeAgent) => {
-      const localAgent = agentsLocalRef.current.find((a) => a.id === storeAgent.id);
-      if (localAgent && storeAgent.currentJob !== localAgent.currentJob) {
-        localAgent.currentJob = storeAgent.currentJob;
-        localAgent.state = storeAgent.state;
-      }
-    });
-  }, [agents]);
-
-  // === CAMERA CONTROLS ===
-  const isPanning = useRef(false);
-  const lastPanPos = useRef({ x: 0, y: 0 });
-  const lastPinchDist = useRef(0);
+  // ─────────────────────────────────────────────────────────────
+  // CAMERA — pan & pinch-to-zoom
+  // ─────────────────────────────────────────────────────────────
+  const getXY = (e) => {
+    if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  };
 
   const handlePointerDown = useCallback((e) => {
-    if (e.touches && e.touches.length === 2) return;
+    if (e.touches && e.touches.length === 2) return; // handled by touchmove
     isPanning.current = true;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    lastPanPos.current = { x: clientX, y: clientY };
+    lastPanPos.current = getXY(e);
   }, []);
 
   const handlePointerMove = useCallback((e) => {
-    if (!isPanning.current || !worldRef.current) return;
+    const world = worldRef.current;
+    if (!world) return;
 
+    // Pinch-to-zoom (two fingers)
     if (e.touches && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const pinchDist = Math.sqrt(dx * dx + dy * dy);
+      const dx   = e.touches[0].clientX - e.touches[1].clientX;
+      const dy   = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (lastPinchDist.current > 0) {
-        const scale = pinchDist / lastPinchDist.current;
-        const newZoom = Math.max(0.4, Math.min(3, worldRef.current.scale.x * scale));
-        worldRef.current.scale.set(newZoom);
-        useWorkspaceStore.getState().setZoom(newZoom);
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = wrapperRef.current.getBoundingClientRect();
+        applyZoom(world, midX - rect.left, midY - rect.top, dist / lastPinchDist.current);
       }
-      lastPinchDist.current = pinchDist;
+      lastPinchDist.current = dist;
       return;
     }
 
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = clientX - lastPanPos.current.x;
-    const dy = clientY - lastPanPos.current.y;
-    lastPanPos.current = { x: clientX, y: clientY };
-
-    worldRef.current.x += dx;
-    worldRef.current.y += dy;
+    if (!isPanning.current) return;
+    const pos = getXY(e);
+    world.x += pos.x - lastPanPos.current.x;
+    world.y += pos.y - lastPanPos.current.y;
+    lastPanPos.current = pos;
   }, []);
 
   const handlePointerUp = useCallback(() => {
-    isPanning.current = false;
+    isPanning.current     = false;
     lastPinchDist.current = 0;
   }, []);
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    if (!worldRef.current) return;
-
-    const delta = e.deltaY > 0 ? 0.92 : 1.08;
-    const newZoom = Math.max(0.4, Math.min(3, worldRef.current.scale.x * delta));
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    const worldPos = {
-      x: (mouseX - worldRef.current.x) / worldRef.current.scale.x,
-      y: (mouseY - worldRef.current.y) / worldRef.current.scale.y,
-    };
-    
-    worldRef.current.scale.set(newZoom);
-    worldRef.current.x = mouseX - worldPos.x * newZoom;
-    worldRef.current.y = mouseY - worldPos.y * newZoom;
-    
-    useWorkspaceStore.getState().setZoom(newZoom);
+    const world = worldRef.current;
+    if (!world || !wrapperRef.current) return;
+    const rect   = wrapperRef.current.getBoundingClientRect();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    applyZoom(world, e.clientX - rect.left, e.clientY - rect.top, factor);
   }, []);
 
   return (
     <div
-      ref={canvasRef}
-      className="canvas-container w-full h-full touch-none select-none"
+      ref={wrapperRef}
+      style={{
+        position: 'relative',
+        width:    '100%',
+        height:   '100%',
+        overflow: 'hidden',
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        background: '#050810',
+      }}
       onMouseDown={handlePointerDown}
       onMouseMove={handlePointerMove}
       onMouseUp={handlePointerUp}
@@ -242,43 +260,62 @@ export default function WorkspaceCanvas() {
   );
 }
 
-/**
- * Center and fit the world in the viewport
- */
-function centerWorld(world, container) {
-  if (!container) return;
-  const cw = container.clientWidth;
-  const ch = container.clientHeight;
+// ─────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────
 
-  const scaleX = cw / MAP_WIDTH;
-  const scaleY = ch / MAP_HEIGHT;
-  const scale = Math.min(scaleX, scaleY) * 0.92;
+/**
+ * Fit and center the world container inside the wrapper.
+ * Leaves a small inset (4%) so the map isn't edge-to-edge.
+ */
+export function fitWorld(world, wrapper) {
+  if (!world || !wrapper) return;
+  const cw = wrapper.clientWidth;
+  const ch = wrapper.clientHeight;
+  if (cw === 0 || ch === 0) return;
+
+  const isMobile = cw < 768;
+  const inset    = isMobile ? 0.98 : 0.94;
+  const scale    = Math.min(cw / MAP_WIDTH, ch / MAP_HEIGHT) * inset;
 
   world.scale.set(scale);
-  world.x = (cw - MAP_WIDTH * scale) / 2;
-  world.y = (ch - MAP_HEIGHT * scale) / 2;
+  world.x = Math.round((cw - MAP_WIDTH  * scale) / 2);
+  world.y = Math.round((ch - MAP_HEIGHT * scale) / 2);
 
   useWorkspaceStore.getState().setZoom(scale);
 }
 
 /**
- * Create ambient vignette overlay for atmosphere
+ * Apply zoom centered on a screen point.
+ */
+function applyZoom(world, screenX, screenY, factor) {
+  const MIN_ZOOM = 0.2;
+  const MAX_ZOOM = 4.0;
+  const current  = world.scale.x;
+  const next     = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, current * factor));
+  if (next === current) return;
+
+  // Keep the screen point stationary
+  const wX = (screenX - world.x) / current;
+  const wY = (screenY - world.y) / current;
+  world.scale.set(next);
+  world.x = screenX - wX * next;
+  world.y = screenY - wY * next;
+
+  useWorkspaceStore.getState().setZoom(next);
+}
+
+/**
+ * Thin ambient vignette around the map edges.
  */
 function createVignette() {
-  const gradient = new PIXI.Graphics();
-  gradient.beginFill(0x000000, 0.15);
-  gradient.drawRect(0, 0, MAP_WIDTH, 20);
-  gradient.drawRect(0, MAP_HEIGHT - 20, MAP_WIDTH, 20);
-  gradient.drawRect(0, 0, 20, MAP_HEIGHT);
-  gradient.drawRect(MAP_WIDTH - 20, 0, 20, MAP_HEIGHT);
-  gradient.endFill();
-
-  gradient.beginFill(0x000000, 0.08);
-  gradient.drawRect(0, 0, MAP_WIDTH, 40);
-  gradient.drawRect(0, MAP_HEIGHT - 40, MAP_WIDTH, 40);
-  gradient.drawRect(0, 0, 40, MAP_HEIGHT);
-  gradient.drawRect(MAP_WIDTH - 40, 0, 40, MAP_HEIGHT);
-  gradient.endFill();
-
-  return gradient;
+  const g = new PIXI.Graphics();
+  const alpha = 0.12;
+  g.beginFill(0x000000, alpha);
+  g.drawRect(0, 0, MAP_WIDTH, 24);
+  g.drawRect(0, MAP_HEIGHT - 24, MAP_WIDTH, 24);
+  g.drawRect(0, 0, 24, MAP_HEIGHT);
+  g.drawRect(MAP_WIDTH - 24, 0, 24, MAP_HEIGHT);
+  g.endFill();
+  return g;
 }
