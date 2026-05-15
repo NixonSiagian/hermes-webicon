@@ -1291,8 +1291,9 @@ input, textarea, select {
     /* Solid dark canvas matches the floor-plan brief */
     background: #0b0f1a;
     overflow: hidden;
-    /* Below the navbar but above page chrome */
-    z-index: 10;
+    /* Stay underneath the fixed navbar (z-index: 100) so the navbar
+       stays clickable and is never covered by the workspace map. */
+    z-index: 1;
   }
 
   /* Re-tint each room on the dark mobile canvas. The walls are now
@@ -1319,15 +1320,11 @@ input, textarea, select {
   }
 }
 
-/* Block ALL transform: scale on touch / small screens to avoid layout breakage */
+/* All transform: scale(...) declarations were removed (#1900) so we no longer
+   need a mobile-only override to neutralise them. The hover float animation
+   on .agent-avatar is also disabled on touch / small viewports below to keep
+   layout stable. */
 @media (max-width: 768px), (hover: none) {
-  .agent-avatar:hover,
-  .agent-avatar,
-  .task-icon,
-  .agent-avatar:hover .task-icon {
-    transform: none !important;
-  }
-
   .agent-avatar:hover {
     animation: none !important;
   }
@@ -1387,29 +1384,33 @@ input, textarea, select {
    .main-content selectors. The HTML uses .app-header, .left-sidebar /
    .right-sidebar, and .main-content. These aliases keep spec-style class
    names working without touching markup. */
-.navbar { /* alias: .app-header */ }
+
+/* Spec rule: navbar is always pinned to the top, full-width, above
+   everything else (z-index: 100). Applied at every viewport so the
+   navbar stays clickable -- the workspace map sits at z-index: 1
+   underneath and never covers it. */
+.navbar,
+header.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 100;
+}
 
 @media (max-width: 768px) {
-  /* Spec rule: navbar must be visible, fixed at top, full-width, z=100. */
-  .navbar,
-  header.navbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    z-index: 100;
-  }
-
   /* Spec rule: hide the sidebar entirely on phones. */
   .sidebar,
   aside.sidebar {
     display: none !important;
   }
 
-  /* Spec rule: main content takes full width. */
+  /* Spec rule: main content takes full width and never overflows. */
   .main-content {
     width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 }
 
@@ -1704,6 +1705,6 @@ input, textarea, select {
 }
 
 @keyframes agent-busy-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50%      { opacity: 0;   transform: scale(1.25); }
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 0;   }
 }

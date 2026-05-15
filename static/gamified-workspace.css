@@ -576,7 +576,8 @@
 }
 
 .workspace-agent:hover {
-  transform: scale(1.25) translateY(-4px);
+  /* No scaling -- it shifted layout on mobile and broke navbar hit areas.
+     Use elevation + glow only. */
   z-index: 11;
   animation: none;
   box-shadow: 
@@ -591,7 +592,7 @@
 }
 
 .workspace-agent.selected {
-  transform: scale(1.35) translateY(-6px);
+  /* No scaling -- selection is conveyed through ring + shadow only. */
   z-index: 12;
   animation: none;
   box-shadow: 
@@ -668,11 +669,9 @@
 @keyframes pulse-warning {
   0%, 100% { 
     box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-    transform: scale(1);
   }
   50% { 
     box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
-    transform: scale(1.1);
   }
 }
 
@@ -854,7 +853,6 @@
 .agent-info-close:hover {
   background: rgba(255, 255, 255, 0.15);
   color: var(--text-primary);
-  transform: scale(1.1);
 }
 
 .agent-info-content {
@@ -1085,7 +1083,6 @@
   /* Simplified furniture on mobile */
   .zone-furniture > * {
     opacity: 0.3;
-    transform: scale(0.8);
   }
 
   /* Prevent zone hover transforms on mobile. */
@@ -1204,7 +1201,8 @@
 }
 
 .workspace-agent:active {
-  transform: scale(1.1);
+  /* No scaling -- keep agent footprint stable to avoid layout shifts. */
+  filter: brightness(1.1);
 }
 
 /* Glow effect for zone interactions */
