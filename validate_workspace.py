@@ -1,196 +1,106 @@
 #!/usr/bin/env python3
 """
-Validation script for NIXON Workspace files
-Checks HTML, CSS, and JS files for basic structure and syntax
+Validation script for the React-based Hermes Workspace.
+
+The legacy NIXON workspace was a single HTML/CSS/JS bundle. It was replaced
+by a React + Vite app that lives in `webui/` and is built into
+`static/nixon-workspace/`. This script just verifies that the build output
+exists and has the shape we expect, plus that the React source files
+contain the components we promise.
 """
 
-import os
-import re
+import sys
 from pathlib import Path
 
-def validate_html_file(filepath):
-    """Validate HTML file structure"""
-    print(f"🔍 Validating HTML: {filepath}")
-    
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        checks = [
-            ('DOCTYPE declaration', r'<!DOCTYPE html>'),
-            ('HTML tag', r'<html[^>]*>'),
-            ('Head section', r'<head>.*</head>'),
-            ('Body section', r'<body>.*</body>'),
-            ('CSS link', r'<link[^>]*nixon-workspace\.css'),
-            ('JS script', r'<script[^>]*nixon-workspace\.js'),
-            ('Main container', r'class="app-container"'),
-            ('Header', r'class="app-header"'),
-            ('Left sidebar', r'class="left-sidebar"'),
-            ('Office workspace', r'class="office-workspace"'),
-            ('Right sidebar', r'class="right-sidebar"'),
-            ('Bottom panels', r'class="bottom-panels"'),
-        ]
-        
-        passed = 0
-        total = len(checks)
-        
-        for check_name, pattern in checks:
-            if re.search(pattern, content, re.DOTALL | re.IGNORECASE):
-                print(f"  ✅ {check_name}")
-                passed += 1
-            else:
-                print(f"  ❌ {check_name}")
-        
-        print(f"  📊 HTML Validation: {passed}/{total} checks passed")
-        return passed == total
-        
-    except Exception as e:
-        print(f"  ❌ Error reading HTML file: {e}")
+
+REPO = Path(__file__).resolve().parent
+BUILD_DIR = REPO / "static" / "nixon-workspace"
+WEBUI_DIR = REPO / "webui"
+
+
+def _check(label: str, ok: bool) -> bool:
+    print(f"  {'PASS' if ok else 'FAIL'}  {label}")
+    return ok
+
+
+def validate_build_output() -> bool:
+    print("Build output:")
+    if not BUILD_DIR.exists():
+        print(f"  FAIL  build directory missing: {BUILD_DIR}")
+        print("        Run: cd webui && npm install && npm run build")
         return False
 
-def validate_css_file(filepath):
-    """Validate CSS file structure"""
-    print(f"🎨 Validating CSS: {filepath}")
-    
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        checks = [
-            ('Root variables', r':root\s*{'),
-            ('Font family', r'--font-family'),
-            ('Color variables', r'--color-primary'),
-            ('App container styles', r'\.app-container'),
-            ('Header styles', r'\.app-header'),
-            ('Sidebar styles', r'\.left-sidebar'),
-            ('Office room styles', r'\.office-room'),
-            ('Agent avatar styles', r'\.agent-avatar'),
-            ('Responsive design', r'@media.*max-width'),
-            ('Animations', r'@keyframes'),
-        ]
-        
-        passed = 0
-        total = len(checks)
-        
-        for check_name, pattern in checks:
-            if re.search(pattern, content, re.DOTALL | re.IGNORECASE):
-                print(f"  ✅ {check_name}")
-                passed += 1
-            else:
-                print(f"  ❌ {check_name}")
-        
-        print(f"  📊 CSS Validation: {passed}/{total} checks passed")
-        return passed == total
-        
-    except Exception as e:
-        print(f"  ❌ Error reading CSS file: {e}")
-        return False
+    index_html = BUILD_DIR / "index.html"
+    assets_dir = BUILD_DIR / "assets"
+    sprites_dir = BUILD_DIR / "sprites"
 
-def validate_js_file(filepath):
-    """Validate JavaScript file structure"""
-    print(f"⚡ Validating JavaScript: {filepath}")
-    
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        checks = [
-            ('NixonWorkspace class', r'class NixonWorkspace'),
-            ('Constructor', r'constructor\(\)'),
-            ('Agents array', r'this\.agents\s*='),
-            ('Tasks array', r'this\.tasks\s*='),
-            ('Event listeners', r'addEventListener'),
-            ('Agent simulation', r'startAgentSimulation'),
-            ('Update methods', r'updateAgentStatus'),
-            ('Panel switching', r'setupPanelSwitching'),
-            ('DOM ready handler', r'DOMContentLoaded'),
-            ('Error handling', r'try.*catch'),
-        ]
-        
-        passed = 0
-        total = len(checks)
-        
-        for check_name, pattern in checks:
-            if re.search(pattern, content, re.DOTALL | re.IGNORECASE):
-                print(f"  ✅ {check_name}")
-                passed += 1
-            else:
-                print(f"  ❌ {check_name}")
-        
-        print(f"  📊 JavaScript Validation: {passed}/{total} checks passed")
-        return passed == total
-        
-    except Exception as e:
-        print(f"  ❌ Error reading JavaScript file: {e}")
-        return False
-
-def validate_file_sizes():
-    """Check file sizes are reasonable"""
-    print(f"📏 Checking file sizes:")
-    
-    files = [
-        ('nixon-workspace.html', 20000),  # ~20KB max
-        ('nixon-workspace.css', 50000),   # ~50KB max
-        ('nixon-workspace.js', 30000),    # ~30KB max
-    ]
-    
-    all_good = True
-    
-    for filename, max_size in files:
-        filepath = Path('static') / filename
-        if filepath.exists():
-            size = filepath.stat().st_size
-            size_kb = size / 1024
-            
-            if size < max_size:
-                print(f"  ✅ {filename}: {size_kb:.1f} KB (good size)")
-            else:
-                print(f"  ⚠️  {filename}: {size_kb:.1f} KB (might be too large)")
-                all_good = False
-        else:
-            print(f"  ❌ {filename}: File not found")
-            all_good = False
-    
-    return all_good
-
-def main():
-    print("🧪 NIXON Workspace - File Validation")
-    print("=" * 50)
-    
-    base_path = Path('static')
-    
-    # Validate individual files
-    html_valid = validate_html_file(base_path / 'nixon-workspace.html')
-    css_valid = validate_css_file(base_path / 'nixon-workspace.css')
-    js_valid = validate_js_file(base_path / 'nixon-workspace.js')
-    sizes_ok = validate_file_sizes()
-    
-    print("\n" + "=" * 50)
-    print("📊 VALIDATION SUMMARY")
-    print("=" * 50)
-    
     results = [
-        ('HTML Structure', html_valid),
-        ('CSS Styling', css_valid),
-        ('JavaScript Logic', js_valid),
-        ('File Sizes', sizes_ok)
+        _check("index.html exists", index_html.exists()),
+        _check("assets/ exists", assets_dir.is_dir()),
+        _check(
+            "assets/ contains a JS bundle",
+            assets_dir.is_dir() and any(assets_dir.glob("*.js")),
+        ),
+        _check(
+            "assets/ contains a CSS bundle",
+            assets_dir.is_dir() and any(assets_dir.glob("*.css")),
+        ),
+        _check("sprites/ exists", sprites_dir.is_dir()),
+        _check(
+            "sprites/ contains all four agent PNGs",
+            sprites_dir.is_dir()
+            and {p.name for p in sprites_dir.glob("*.png")}
+            >= {"dev.png", "manager.png", "ops.png", "research.png"},
+        ),
     ]
-    
-    passed = sum(1 for _, valid in results if valid)
-    total = len(results)
-    
-    for name, valid in results:
-        status = "✅ PASS" if valid else "❌ FAIL"
-        print(f"{name:20} {status}")
-    
-    print(f"\nOverall: {passed}/{total} validations passed")
-    
-    if passed == total:
-        print("\n🎉 All validations passed! The workspace is ready for deployment.")
-        return True
-    else:
-        print("\n⚠️  Some validations failed. Please review the issues above.")
-        return False
+
+    if index_html.exists():
+        html = index_html.read_text(encoding="utf-8")
+        results.append(_check('index.html has <div id="root">', 'id="root"' in html))
+        results.append(
+            _check(
+                "index.html references hashed assets",
+                "./assets/" in html,
+            )
+        )
+
+    return all(results)
+
+
+def validate_react_sources() -> bool:
+    print("React sources:")
+    src = WEBUI_DIR / "src"
+    expected = {
+        "App.jsx": ["Navbar", "Workspace"],
+        "components/Navbar.jsx": ["export default function Navbar"],
+        "components/Workspace.jsx": ["export default function Workspace"],
+        "components/Room.jsx": ["export default function Room"],
+        "components/Agent.jsx": ["export default function Agent"],
+    }
+
+    ok = True
+    for rel, needles in expected.items():
+        path = src / rel
+        if not path.exists():
+            ok = _check(f"{rel} exists", False) and ok
+            continue
+        text = path.read_text(encoding="utf-8")
+        ok = _check(f"{rel} exists", True) and ok
+        for needle in needles:
+            ok = _check(f"  {rel} mentions '{needle}'", needle in text) and ok
+    return ok
+
+
+def main() -> int:
+    print("Hermes Workspace - Validation")
+    print("=" * 40)
+    sources_ok = validate_react_sources()
+    build_ok = validate_build_output()
+    print("=" * 40)
+    print(f"React sources: {'OK' if sources_ok else 'FAIL'}")
+    print(f"Build output:  {'OK' if build_ok else 'FAIL'}")
+    return 0 if (sources_ok and build_ok) else 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
