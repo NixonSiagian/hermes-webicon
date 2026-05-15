@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Navbar from './components/Navbar';
-import Dashboard from './components/Dashboard';
 import AgentPanel from './components/AgentPanel';
 import TasksPanel from './components/TasksPanel';
 import SettingsPanel from './components/SettingsPanel';
@@ -10,17 +9,19 @@ import AgentPopup from './components/AgentPopup';
 import { useWorkspaceStore } from './store/workspaceStore';
 
 /**
- * Hermes 2D AI Agent Workspace
+ * Hermes 2D AI Agent Workspace — RimWorld Style
  *
- * A live 2D simulation dashboard where AI agents move autonomously
- * inside rooms (Engineering, Research Lab, Operations, Meeting).
+ * A live tile-based 2D office simulation where AI agents move
+ * autonomously inside rooms with real floor tiles, walls, and furniture.
  *
  * Architecture:
- * - PixiJS canvas for 2D rendering
+ * - PixiJS canvas with tile-based rendering
+ * - Procedural floor/wall/furniture textures
  * - Zustand for state management
  * - Autonomous movement system with lerp interpolation
- * - Sprite-based animated agents
- * - Mobile-first responsive design
+ * - Pixel-art animated agent sprites
+ * - Depth-sorted rendering (Y-sorting like RimWorld)
+ * - Mobile-first responsive design with touch pan/zoom
  */
 export default function App() {
   const [activeView, setActiveView] = useState('workspace');
@@ -42,7 +43,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-full bg-hermes-dark">
+    <div className="w-full h-full bg-[#050810]">
       {/* Navbar */}
       <Navbar activeView={activeView} onViewChange={setActiveView} />
 

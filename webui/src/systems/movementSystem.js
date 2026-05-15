@@ -1,14 +1,20 @@
 /**
- * Movement System
- * Handles autonomous agent movement with lerp interpolation,
- * idle delays, target selection, and collision avoidance.
+ * Movement System — RimWorld-style Tile-Based
+ * 
+ * Handles autonomous agent movement within tile-based rooms.
+ * Agents move between random positions inside their assigned room,
+ * with smooth lerp interpolation and collision avoidance.
+ * Positions are in pixel coordinates (tile * TILE_SIZE).
  */
+import { TILE_SIZE, ROOMS } from '../store/workspaceStore';
 
-const SPEED = 60; // pixels per second
-const ARRIVAL_THRESHOLD = 5; // pixels
-const IDLE_MIN = 2; // seconds
-const IDLE_MAX = 5; // seconds
-const COLLISION_RADIUS = 30; // pixels
+const SPEED = 55; // pixels per second
+const ARRIVAL_THRESHOLD = 6; // pixels
+const IDLE_MIN = 2.5; // seconds
+const IDLE_MAX = 6; // seconds
+const COLLISION_RADIUS = 24; // pixels
+const THINK_MIN = 3;
+const THINK_MAX = 7;
 
 /**
  * Linear interpolation
@@ -25,21 +31,38 @@ function dist(x1, y1, x2, y2) {
 }
 
 /**
- * Get a random target position inside the agent's assigned room
+ * Get pixel bounds for a room (with padding to keep agents inside walkable area)
  */
-function getRandomTarget(agent, rooms) {
-  const room = rooms.find((r) => r.id === agent.room);
-  if (!room) return { x: agent.x, y: agent.y };
-
-  const pad = 50;
+function getRoomWalkArea(roomId) {
+  const room = ROOMS.find((r) => r.id === roomId);
+  if (!room) return null;
+  
+  const { col, row, w, h } = room.bounds;
+  const pad = 2; // tiles padding from walls
+  
   return {
-    x: room.bounds.x + pad + Math.random() * (room.bounds.width - pad * 2),
-    y: room.bounds.y + pad + Math.random() * (room.bounds.height - pad * 2),
+    minX: (col + pad) * TILE_SIZE,
+    minY: (row + pad) * TILE_SIZE,
+    maxX: (col + w - pad) * TILE_SIZE,
+    maxY: (row + h - pad) * TILE_SIZE,
   };
 }
 
 /**
- * Simple collision avoidance - push agents apart if too close
+ * Get a random target position inside the agent's assigned room
+ */
+function getRandomTarget(agent) {
+  const area = getRoomWalkArea(agent.room);
+  if (!area) return { x: agent.x, y: agent.y };
+
+  return {
+    x: area.minX + Math.random() * (area.maxX - area.minX),
+    y: area.minY + Math.random() * (area.maxY - area.minY),
+  };
+}
+
+/**
+ * Simple collision avoidance - nudge agents apart if overlapping
  */
 function avoidCollisions(agents) {
   for (let i = 0; i < agents.length; i++) {
@@ -51,31 +74,30 @@ function avoidCollisions(agents) {
         const overlap = (COLLISION_RADIUS - d) / 2;
         const dx = (b.x - a.x) / d;
         const dy = (b.y - a.y) / d;
-        a.x -= dx * overlap * 0.5;
-        a.y -= dy * overlap * 0.5;
-        b.x += dx * overlap * 0.5;
-        b.y += dy * overlap * 0.5;
+        a.x -= dx * overlap * 0.4;
+        a.y -= dy * overlap * 0.4;
+        b.x += dx * overlap * 0.4;
+        b.y += dy * overlap * 0.4;
       }
     }
   }
 }
 
 /**
- * Clamp agent position to room bounds
+ * Clamp agent position to room walkable area
  */
-function clampToRoom(agent, rooms) {
-  const room = rooms.find((r) => r.id === agent.room);
-  if (!room) return;
+function clampToRoom(agent) {
+  const area = getRoomWalkArea(agent.room);
+  if (!area) return;
 
-  const pad = 30;
-  agent.x = Math.max(room.bounds.x + pad, Math.min(room.bounds.x + room.bounds.width - pad, agent.x));
-  agent.y = Math.max(room.bounds.y + pad, Math.min(room.bounds.y + room.bounds.height - pad, agent.y));
+  agent.x = Math.max(area.minX, Math.min(area.maxX, agent.x));
+  agent.y = Math.max(area.minY, Math.min(area.maxY, agent.y));
 }
 
 /**
  * Update all agents for one frame
  * @param {Array} agents - mutable agent array
- * @param {Array} rooms - room definitions
+ * @param {Array} rooms - room definitions (unused, kept for API compat)
  * @param {number} dt - delta time in seconds
  * @returns {Array} updated agents
  */
@@ -87,14 +109,25 @@ export function updateMovement(agents, rooms, dt) {
       case 'idle': {
         a.idleTimer -= dt;
         if (a.idleTimer <= 0) {
-          // Pick new target and start walking
-          const target = getRandomTarget(a, rooms);
-          a.targetX = target.x;
-          a.targetY = target.y;
-          a.state = 'walking';
-          // Set direction based on target
-          if (target.x !== a.x) {
-            a.direction = target.x > a.x ? 1 : -1;
+          // Decide next action
+          const rand = Math.random();
+          if (rand < 0.6) {
+            // Walk to new position
+            const target = getRandomTarget(a);
+            a.targetX = target.x;
+            a.targetY = target.y;
+            a.state = 'walking';
+            if (target.x !== a.x) {
+              a.direction = target.x > a.x ? 1 : -1;
+            }
+          } else if (rand < 0.85) {
+            // Start thinking
+            a.state = 'thinking';
+            a.idleTimer = THINK_MIN + Math.random() * (THINK_MAX - THINK_MIN);
+          } else {
+            // Start working
+            a.state = 'working';
+            a.idleTimer = 4 + Math.random() * 8;
           }
         }
         break;
@@ -103,36 +136,45 @@ export function updateMovement(agents, rooms, dt) {
       case 'walking': {
         const d = dist(a.x, a.y, a.targetX, a.targetY);
         if (d < ARRIVAL_THRESHOLD) {
-          // Arrived at target
-          a.state = Math.random() < 0.3 ? 'thinking' : 'idle';
-          a.idleTimer = IDLE_MIN + Math.random() * (IDLE_MAX - IDLE_MIN);
-          a.velocity = { x: 0, y: 0 };
+          // Arrived
+          const rand = Math.random();
+          if (rand < 0.4) {
+            a.state = 'working';
+            a.idleTimer = 4 + Math.random() * 6;
+          } else if (rand < 0.6) {
+            a.state = 'thinking';
+            a.idleTimer = THINK_MIN + Math.random() * (THINK_MAX - THINK_MIN);
+          } else {
+            a.state = 'idle';
+            a.idleTimer = IDLE_MIN + Math.random() * (IDLE_MAX - IDLE_MIN);
+          }
         } else {
-          // Move toward target with lerp
+          // Move toward target
           const moveSpeed = SPEED * dt;
           const t = Math.min(moveSpeed / d, 1);
           a.x = lerp(a.x, a.targetX, t);
           a.y = lerp(a.y, a.targetY, t);
 
-          // Update direction
-          if (Math.abs(a.targetX - a.x) > 1) {
+          // Update facing direction
+          if (Math.abs(a.targetX - a.x) > 2) {
             a.direction = a.targetX > a.x ? 1 : -1;
           }
 
-          // Animate walking
+          // Animate
           a.animFrame = (a.animFrame + dt * 8) % 4;
         }
         break;
       }
 
       case 'working': {
-        // Stay in place, occasionally shift slightly
         a.idleTimer -= dt;
         if (a.idleTimer <= 0) {
-          a.idleTimer = 3 + Math.random() * 4;
-          // Small shift while working
-          a.x += (Math.random() - 0.5) * 4;
-          a.y += (Math.random() - 0.5) * 4;
+          a.state = 'idle';
+          a.idleTimer = IDLE_MIN + Math.random() * (IDLE_MAX - IDLE_MIN);
+        }
+        // Tiny shift while working (typing animation)
+        if (Math.random() < 0.02) {
+          a.x += (Math.random() - 0.5) * 1.5;
         }
         break;
       }
@@ -140,8 +182,14 @@ export function updateMovement(agents, rooms, dt) {
       case 'thinking': {
         a.idleTimer -= dt;
         if (a.idleTimer <= 0) {
-          a.state = 'idle';
-          a.idleTimer = IDLE_MIN + Math.random() * (IDLE_MAX - IDLE_MIN);
+          // After thinking, walk somewhere
+          const target = getRandomTarget(a);
+          a.targetX = target.x;
+          a.targetY = target.y;
+          a.state = 'walking';
+          if (target.x !== a.x) {
+            a.direction = target.x > a.x ? 1 : -1;
+          }
         }
         break;
       }
@@ -157,7 +205,7 @@ export function updateMovement(agents, rooms, dt) {
   avoidCollisions(updated);
 
   // Clamp all agents to their rooms
-  updated.forEach((a) => clampToRoom(a, rooms));
+  updated.forEach((a) => clampToRoom(a));
 
   return updated;
 }
