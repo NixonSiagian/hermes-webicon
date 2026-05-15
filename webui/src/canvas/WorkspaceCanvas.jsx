@@ -1,29 +1,39 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import * as PIXI from 'pixi.js';
-import { useWorkspaceStore } from '../store/workspaceStore';
+import { useWorkspaceStore, MAP_WIDTH, MAP_HEIGHT } from '../store/workspaceStore';
+import { renderTileMap, renderRoomLabels } from '../systems/tileRenderer';
+import { renderFurniture } from '../systems/furnitureRenderer';
 import { updateMovement } from '../systems/movementSystem';
 import { createAgentVisual, updateAgentVisual, destroyAgentVisual } from '../systems/agentSystem';
 
 /**
- * Main PixiJS Canvas Component
- * Renders the 2D workspace simulation with rooms, agents, and interactive elements.
+ * Main RimWorld-Style 2D Workspace Canvas
+ * 
+ * Renders a tile-based office environment with:
+ * - Floor tiles (multiple types per room)
+ * - Thick wall blocks between rooms
+ * - Furniture sprites with shadows
+ * - Animated character agents with depth sorting
+ * - Pan/zoom camera controls
+ * - Mobile-friendly touch support
  */
 export default function WorkspaceCanvas() {
   const canvasRef = useRef(null);
   const appRef = useRef(null);
   const agentVisualsRef = useRef({});
   const worldRef = useRef(null);
+  const agentLayerRef = useRef(null);
   const lastTimeRef = useRef(0);
   const agentsLocalRef = useRef([]);
 
-  const { rooms, agents, isFullscreen, setSelectedAgent, zoom, panOffset } = useWorkspaceStore();
+  const { tileMap, rooms, agents, setSelectedAgent, zoom } = useWorkspaceStore();
 
-  // Initialize PixiJS
+  // Initialize PixiJS application and render world
   useEffect(() => {
     if (!canvasRef.current || appRef.current) return;
 
     const app = new PIXI.Application({
-      background: 0x080b14,
+      background: 0x050810,
       resizeTo: canvasRef.current,
       antialias: false,
       resolution: window.devicePixelRatio || 1,
@@ -33,17 +43,30 @@ export default function WorkspaceCanvas() {
     canvasRef.current.appendChild(app.view);
     appRef.current = app;
 
-    // World container (for zoom/pan)
+    // World container (camera target)
     const world = new PIXI.Container();
     world.sortableChildren = true;
     app.stage.addChild(world);
     worldRef.current = world;
 
-    // Draw grid background
-    drawGrid(world, app);
+    // === LAYER 1: Tilemap (floor + walls) ===
+    const tileMapSprite = renderTileMap(app, tileMap);
+    world.addChild(tileMapSprite);
 
-    // Draw rooms
-    drawRooms(world, rooms);
+    // === LAYER 2: Room labels ===
+    const labelsContainer = renderRoomLabels(app);
+    world.addChild(labelsContainer);
+
+    // === LAYER 3: Furniture ===
+    const furnitureContainer = renderFurniture(app);
+    world.addChild(furnitureContainer);
+
+    // === LAYER 4: Agents (depth-sorted) ===
+    const agentLayer = new PIXI.Container();
+    agentLayer.sortableChildren = true;
+    agentLayer.zIndex = 50;
+    world.addChild(agentLayer);
+    agentLayerRef.current = agentLayer;
 
     // Create agent visuals
     const visuals = {};
@@ -52,15 +75,20 @@ export default function WorkspaceCanvas() {
       visual.container.on('pointertap', () => {
         setSelectedAgent(agent);
       });
-      world.addChild(visual.container);
+      agentLayer.addChild(visual.container);
       visuals[agent.id] = visual;
     });
     agentVisualsRef.current = visuals;
 
-    // Initialize local agents copy for the simulation
+    // Initialize local agents copy for simulation
     agentsLocalRef.current = agents.map((a) => ({ ...a }));
 
-    // Main game loop
+    // === LAYER 5: Ambient overlay (vignette) ===
+    const vignette = createVignette(app);
+    vignette.zIndex = 200;
+    world.addChild(vignette);
+
+    // === GAME LOOP ===
     lastTimeRef.current = performance.now();
     app.ticker.add(() => {
       const now = performance.now();
@@ -70,7 +98,7 @@ export default function WorkspaceCanvas() {
       // Update movement
       agentsLocalRef.current = updateMovement(agentsLocalRef.current, rooms, dt);
 
-      // Update visuals
+      // Update agent visuals
       agentsLocalRef.current.forEach((agent) => {
         const visual = agentVisualsRef.current[agent.id];
         if (visual) {
@@ -79,9 +107,9 @@ export default function WorkspaceCanvas() {
       });
     });
 
-    // Handle resize
+    // === RESIZE HANDLER ===
     const handleResize = () => {
-      if (app.renderer) {
+      if (app.renderer && canvasRef.current) {
         app.renderer.resize(
           canvasRef.current.clientWidth,
           canvasRef.current.clientHeight
@@ -91,8 +119,8 @@ export default function WorkspaceCanvas() {
     };
 
     window.addEventListener('resize', handleResize);
-    // Initial center
-    setTimeout(() => centerWorld(world, canvasRef.current), 50);
+    // Initial fit
+    setTimeout(() => centerWorld(world, canvasRef.current), 60);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -102,7 +130,7 @@ export default function WorkspaceCanvas() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync store agents to local state (for external updates like API)
+  // Sync store agent changes (external task assignments)
   useEffect(() => {
     agents.forEach((storeAgent) => {
       const localAgent = agentsLocalRef.current.find((a) => a.id === storeAgent.id);
@@ -113,14 +141,7 @@ export default function WorkspaceCanvas() {
     });
   }, [agents]);
 
-  // Zoom/pan updates
-  useEffect(() => {
-    if (worldRef.current) {
-      worldRef.current.scale.set(zoom);
-    }
-  }, [zoom]);
-
-  // Touch/mouse interaction for pan and zoom
+  // === CAMERA CONTROLS ===
   const isPanning = useRef(false);
   const lastPanPos = useRef({ x: 0, y: 0 });
   const lastPinchDist = useRef(0);
@@ -135,15 +156,16 @@ export default function WorkspaceCanvas() {
 
   const handlePointerMove = useCallback((e) => {
     if (!isPanning.current || !worldRef.current) return;
+
+    // Pinch zoom (multi-touch)
     if (e.touches && e.touches.length === 2) {
-      // Pinch zoom
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const pinchDist = Math.sqrt(dx * dx + dy * dy);
 
       if (lastPinchDist.current > 0) {
         const scale = pinchDist / lastPinchDist.current;
-        const newZoom = Math.max(0.5, Math.min(3, worldRef.current.scale.x * scale));
+        const newZoom = Math.max(0.4, Math.min(3, worldRef.current.scale.x * scale));
         worldRef.current.scale.set(newZoom);
         useWorkspaceStore.getState().setZoom(newZoom);
       }
@@ -151,6 +173,7 @@ export default function WorkspaceCanvas() {
       return;
     }
 
+    // Pan
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const dx = clientX - lastPanPos.current.x;
@@ -169,16 +192,31 @@ export default function WorkspaceCanvas() {
   const handleWheel = useCallback((e) => {
     e.preventDefault();
     if (!worldRef.current) return;
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.5, Math.min(3, worldRef.current.scale.x * delta));
+
+    const delta = e.deltaY > 0 ? 0.92 : 1.08;
+    const newZoom = Math.max(0.4, Math.min(3, worldRef.current.scale.x * delta));
+    
+    // Zoom toward mouse position
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const worldPos = {
+      x: (mouseX - worldRef.current.x) / worldRef.current.scale.x,
+      y: (mouseY - worldRef.current.y) / worldRef.current.scale.y,
+    };
+    
     worldRef.current.scale.set(newZoom);
+    worldRef.current.x = mouseX - worldPos.x * newZoom;
+    worldRef.current.y = mouseY - worldPos.y * newZoom;
+    
     useWorkspaceStore.getState().setZoom(newZoom);
   }, []);
 
   return (
     <div
       ref={canvasRef}
-      className="canvas-container w-full h-full touch-none"
+      className="canvas-container w-full h-full touch-none select-none"
       onMouseDown={handlePointerDown}
       onMouseMove={handlePointerMove}
       onMouseUp={handlePointerUp}
@@ -192,221 +230,45 @@ export default function WorkspaceCanvas() {
 }
 
 /**
- * Center the world container in the viewport
+ * Center and fit the world in the viewport
  */
 function centerWorld(world, container) {
   if (!container) return;
   const cw = container.clientWidth;
   const ch = container.clientHeight;
-  const worldWidth = 930;
-  const worldHeight = 650;
 
-  const scaleX = cw / worldWidth;
-  const scaleY = ch / worldHeight;
-  const scale = Math.min(scaleX, scaleY) * 0.95;
+  const scaleX = cw / MAP_WIDTH;
+  const scaleY = ch / MAP_HEIGHT;
+  const scale = Math.min(scaleX, scaleY) * 0.92;
 
   world.scale.set(scale);
-  world.x = (cw - worldWidth * scale) / 2;
-  world.y = (ch - worldHeight * scale) / 2;
+  world.x = (cw - MAP_WIDTH * scale) / 2;
+  world.y = (ch - MAP_HEIGHT * scale) / 2;
 
   useWorkspaceStore.getState().setZoom(scale);
 }
 
 /**
- * Draw the background grid
+ * Create ambient vignette overlay for atmosphere
  */
-function drawGrid(world, app) {
-  const grid = new PIXI.Graphics();
-  grid.zIndex = -10;
+function createVignette(app) {
+  const g = new PIXI.Graphics();
+  
+  // Subtle dark edges
+  const gradient = new PIXI.Graphics();
+  gradient.beginFill(0x000000, 0.15);
+  gradient.drawRect(0, 0, MAP_WIDTH, 20);
+  gradient.drawRect(0, MAP_HEIGHT - 20, MAP_WIDTH, 20);
+  gradient.drawRect(0, 0, 20, MAP_HEIGHT);
+  gradient.drawRect(MAP_WIDTH - 20, 0, 20, MAP_HEIGHT);
+  gradient.endFill();
 
-  // Dark background
-  grid.beginFill(0x080b14);
-  grid.drawRect(0, 0, 930, 650);
-  grid.endFill();
+  gradient.beginFill(0x000000, 0.08);
+  gradient.drawRect(0, 0, MAP_WIDTH, 40);
+  gradient.drawRect(0, MAP_HEIGHT - 40, MAP_WIDTH, 40);
+  gradient.drawRect(0, 0, 40, MAP_HEIGHT);
+  gradient.drawRect(MAP_WIDTH - 40, 0, 40, MAP_HEIGHT);
+  gradient.endFill();
 
-  // Grid lines
-  grid.lineStyle(1, 0xffffff, 0.03);
-  for (let x = 0; x <= 930; x += 40) {
-    grid.moveTo(x, 0);
-    grid.lineTo(x, 650);
-  }
-  for (let y = 0; y <= 650; y += 40) {
-    grid.moveTo(0, y);
-    grid.lineTo(930, y);
-  }
-
-  world.addChild(grid);
-}
-
-/**
- * Draw room boundaries and labels
- */
-function drawRooms(world, rooms) {
-  rooms.forEach((room) => {
-    const { x, y, width, height } = room.bounds;
-
-    // Room background
-    const bg = new PIXI.Graphics();
-    bg.beginFill(room.bgColor, 0.6);
-    bg.drawRoundedRect(x, y, width, height, 10);
-    bg.endFill();
-
-    // Border
-    bg.lineStyle(3, room.color, 0.8);
-    bg.drawRoundedRect(x, y, width, height, 10);
-
-    // Inner glow
-    bg.lineStyle(1, room.color, 0.2);
-    bg.drawRoundedRect(x + 4, y + 4, width - 8, height - 8, 8);
-
-    bg.zIndex = -5;
-    world.addChild(bg);
-
-    // Room label
-    const label = new PIXI.Text(room.label, {
-      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-      fontSize: 13,
-      fontWeight: '700',
-      fill: 0xf3f4f6,
-      letterSpacing: 0.5,
-    });
-    label.x = x + 12;
-    label.y = y + 10;
-    label.zIndex = -4;
-
-    // Label background
-    const labelBg = new PIXI.Graphics();
-    labelBg.beginFill(0x0b0f1a, 0.75);
-    labelBg.drawRoundedRect(x + 8, y + 6, label.width + 12, label.height + 6, 5);
-    labelBg.endFill();
-    labelBg.zIndex = -4;
-    world.addChild(labelBg);
-    world.addChild(label);
-
-    // Draw furniture
-    drawFurniture(world, room);
-  });
-}
-
-/**
- * Draw furniture inside rooms
- */
-function drawFurniture(world, room) {
-  const { x, y, width, height } = room.bounds;
-
-  const furnitureItems = getFurnitureForRoom(room.id);
-  furnitureItems.forEach((item) => {
-    const g = new PIXI.Graphics();
-    g.zIndex = -3;
-
-    const fx = x + item.x;
-    const fy = y + item.y;
-
-    switch (item.type) {
-      case 'desk':
-        g.beginFill(0x6b4f2c);
-        g.lineStyle(1, 0x8a6a3f);
-        g.drawRoundedRect(fx, fy, item.w || 60, item.h || 30, 3);
-        g.endFill();
-        // Monitor on desk
-        g.beginFill(0x1e293b);
-        g.drawRoundedRect(fx + 10, fy + 2, 20, 16, 2);
-        g.endFill();
-        g.beginFill(0x334155);
-        g.drawRect(fx + 12, fy + 4, 16, 12);
-        g.endFill();
-        break;
-      case 'chair':
-        g.beginFill(0x4b5563);
-        g.lineStyle(1, 0x6b7280);
-        g.drawCircle(fx, fy, 10);
-        g.endFill();
-        break;
-      case 'table':
-        g.beginFill(0x374151);
-        g.lineStyle(1, 0x4b5563);
-        g.drawRoundedRect(fx, fy, item.w || 80, item.h || 50, 6);
-        g.endFill();
-        break;
-      case 'server':
-        g.beginFill(0x1f2937);
-        g.lineStyle(1, 0x374151);
-        g.drawRoundedRect(fx, fy, 25, 40, 3);
-        g.endFill();
-        // LED lights
-        g.beginFill(0x10b981);
-        g.drawCircle(fx + 6, fy + 10, 2);
-        g.drawCircle(fx + 6, fy + 18, 2);
-        g.drawCircle(fx + 6, fy + 26, 2);
-        g.endFill();
-        break;
-      case 'whiteboard':
-        g.beginFill(0xf8fafc);
-        g.lineStyle(2, 0x94a3b8);
-        g.drawRect(fx, fy, item.w || 70, item.h || 10);
-        g.endFill();
-        break;
-    }
-
-    world.addChild(g);
-  });
-}
-
-/**
- * Get furniture layout for each room
- */
-function getFurnitureForRoom(roomId) {
-  switch (roomId) {
-    case 'engineering':
-      return [
-        { type: 'desk', x: 40, y: 60, w: 70, h: 30 },
-        { type: 'desk', x: 40, y: 130, w: 70, h: 30 },
-        { type: 'desk', x: 40, y: 200, w: 70, h: 30 },
-        { type: 'desk', x: 200, y: 60, w: 70, h: 30 },
-        { type: 'desk', x: 200, y: 130, w: 70, h: 30 },
-        { type: 'desk', x: 200, y: 200, w: 70, h: 30 },
-        { type: 'chair', x: 75, y: 110 },
-        { type: 'chair', x: 75, y: 180 },
-        { type: 'chair', x: 235, y: 110 },
-        { type: 'chair', x: 235, y: 180 },
-        { type: 'whiteboard', x: 310, y: 50, w: 80, h: 8 },
-      ];
-    case 'research':
-      return [
-        { type: 'desk', x: 40, y: 70, w: 80, h: 30 },
-        { type: 'desk', x: 40, y: 150, w: 80, h: 30 },
-        { type: 'desk', x: 250, y: 70, w: 80, h: 30 },
-        { type: 'desk', x: 250, y: 150, w: 80, h: 30 },
-        { type: 'table', x: 140, y: 200, w: 120, h: 50 },
-        { type: 'whiteboard', x: 160, y: 50, w: 100, h: 8 },
-        { type: 'chair', x: 80, y: 120 },
-        { type: 'chair', x: 290, y: 120 },
-      ];
-    case 'operations':
-      return [
-        { type: 'desk', x: 40, y: 60, w: 70, h: 30 },
-        { type: 'desk', x: 40, y: 140, w: 70, h: 30 },
-        { type: 'desk', x: 200, y: 60, w: 70, h: 30 },
-        { type: 'desk', x: 200, y: 140, w: 70, h: 30 },
-        { type: 'server', x: 340, y: 60 },
-        { type: 'server', x: 370, y: 60 },
-        { type: 'server', x: 340, y: 160 },
-        { type: 'chair', x: 75, y: 110 },
-        { type: 'chair', x: 235, y: 110 },
-        { type: 'chair', x: 75, y: 190 },
-      ];
-    case 'meeting':
-      return [
-        { type: 'table', x: 140, y: 100, w: 140, h: 80 },
-        { type: 'chair', x: 170, y: 80 },
-        { type: 'chair', x: 230, y: 80 },
-        { type: 'chair', x: 170, y: 200 },
-        { type: 'chair', x: 230, y: 200 },
-        { type: 'chair', x: 120, y: 140 },
-        { type: 'chair', x: 300, y: 140 },
-        { type: 'whiteboard', x: 120, y: 40, w: 180, h: 10 },
-      ];
-    default:
-      return [];
-  }
+  return gradient;
 }
