@@ -1225,10 +1225,20 @@ input, textarea, select {
   .app-header {
     padding: 0 var(--space-4);
     height: 60px;
-    /* Keep navbar pinned at top with high z-index so it never gets covered */
-    position: sticky;
+    /* Pin navbar to top of viewport so it cannot be scrolled away or
+       covered by the full-screen workspace map below it. */
+    position: fixed;
     top: 0;
-    z-index: 1000;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 100;
+  }
+
+  /* Reserve vertical space for the now-fixed navbar so app content does
+     not slide underneath it. */
+  .app-container {
+    padding-top: 60px;
   }
 
   .header-center {
@@ -1278,14 +1288,34 @@ input, textarea, select {
     height: calc(100vh - 60px);
     margin: 0;
     border-radius: 0;
+    /* Solid dark canvas matches the floor-plan brief */
+    background: #0b0f1a;
+    overflow: hidden;
     /* Below the navbar but above page chrome */
     z-index: 10;
   }
 
+  /* Re-tint each room on the dark mobile canvas. The walls are now
+     darker so they feel like real office partitions. */
+  #zone-engineering, .room.engineering,
+  #zone-research,    .room.research,
+  #zone-operations,  .room.operations,
+  #zone-meeting,     .room.meeting,
+  #zone-lounge,      .room.lounge {
+    border: 3px solid #2a2f45;
+    background: #111827;
+    border-radius: 6px;
+  }
+  #zone-engineering, .room.engineering { box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.18); }
+  #zone-research,    .room.research    { box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.18); }
+  #zone-operations,  .room.operations  { box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.18); }
+  #zone-meeting,     .room.meeting     { box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.18); }
+  #zone-lounge,      .room.lounge      { box-shadow: inset 0 0 0 1px rgba(236, 72, 153, 0.18); }
+
   /* Larger, easier-to-tap agents on mobile */
   .agent {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
   }
 }
 
@@ -1352,7 +1382,37 @@ input, textarea, select {
   background: var(--color-gray-400);
 }
 
-/* ===== UTILITY CLASSES ===== */
+/* ===== SPEC-FACING ALIAS CLASSES =====
+   The spec writes the rules in terms of generic .navbar / .sidebar /
+   .main-content selectors. The HTML uses .app-header, .left-sidebar /
+   .right-sidebar, and .main-content. These aliases keep spec-style class
+   names working without touching markup. */
+.navbar { /* alias: .app-header */ }
+
+@media (max-width: 768px) {
+  /* Spec rule: navbar must be visible, fixed at top, full-width, z=100. */
+  .navbar,
+  header.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 100;
+  }
+
+  /* Spec rule: hide the sidebar entirely on phones. */
+  .sidebar,
+  aside.sidebar {
+    display: none !important;
+  }
+
+  /* Spec rule: main content takes full width. */
+  .main-content {
+    width: 100%;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1399,8 +1459,11 @@ input, textarea, select {
     inset 0 0 40px rgba(0, 0, 0, 0.18);
 }
 
-/* Each zone is a real "room" — thicker walls + furniture inside */
-.zone {
+/* Each zone is a real "room" -- thicker walls + furniture inside.
+   Both `.zone` (legacy) and `.room` selectors target the same nodes so
+   markup using either name keeps working. */
+.zone,
+.room {
   position: absolute;
   color: #1f2937;
   font-size: 12px;
@@ -1420,17 +1483,29 @@ input, textarea, select {
   z-index: 1;
 }
 
-/* Tinted rooms so each space "feels" different */
-#zone-engineering { top: 8%;  left: 6%;  width: 38%; height: 38%;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.55)); }
-#zone-research    { top: 8%;  right: 6%; width: 38%; height: 38%;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(255, 255, 255, 0.55)); }
-#zone-operations  { bottom: 8%; left: 6%;  width: 38%; height: 38%;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(255, 255, 255, 0.55)); }
-#zone-meeting     { bottom: 8%; right: 6%; width: 38%; height: 38%;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(255, 255, 255, 0.55)); }
-#zone-lounge      { top: 40%;  left: 40%; width: 20%; height: 20%;
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(255, 255, 255, 0.6)); }
+/* Floor-plan layout: 4 corner rooms with a hallway gap, plus a centred
+   lounge. Percentages (no fixed pixel widths) so the same numbers work
+   on phones, tablets, and desktops. */
+#zone-engineering, .room.engineering {
+  top: 5%;  left: 5%;  width: 40%; height: 40%;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.55));
+}
+#zone-research, .room.research {
+  top: 5%;  right: 5%; width: 40%; height: 40%;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(255, 255, 255, 0.55));
+}
+#zone-operations, .room.operations {
+  bottom: 5%; left: 5%;  width: 40%; height: 40%;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(255, 255, 255, 0.55));
+}
+#zone-meeting, .room.meeting {
+  bottom: 5%; right: 5%; width: 40%; height: 40%;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(255, 255, 255, 0.55));
+}
+#zone-lounge, .room.lounge {
+  top: 40%;  left: 40%; width: 20%; height: 20%;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(255, 255, 255, 0.6));
+}
 
 /* ===== FURNITURE INSIDE ZONES (pure CSS, no extra DOM) ===== */
 /* Engineering: two desks side by side */
@@ -1542,16 +1617,93 @@ input, textarea, select {
   box-shadow: 0 2px 0 #2e1f12;
 }
 
+/* ===== ATOMIC FURNITURE PIECES =====
+   Used when JS injects furniture nodes into a `.room` (instead of relying
+   only on the ::before / ::after pseudo decorations above). Each piece is
+   absolutely positioned inside its parent `.zone` / `.room`. */
+.desk {
+  position: absolute;
+  width: 40px;
+  height: 20px;
+  background: linear-gradient(180deg, #6b4a2b 0%, #4a3220 100%);
+  border-radius: 3px;
+  box-shadow: 0 2px 0 #2e1f12, inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.chair {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #374151;
+  border-radius: 50%;
+  box-shadow: 0 1px 0 #111827;
+}
+
+.meeting-table {
+  position: absolute;
+  width: 70%;
+  height: 28%;
+  left: 15%;
+  top: 36%;
+  background: linear-gradient(180deg, #8b5a2b 0%, #5a3a1c 100%);
+  border-radius: 40px;
+  box-shadow: 0 4px 0 #3a2410, inset 0 2px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ===== AGENT SPRITES =====
+   Each agent is a 28x28 absolutely-positioned <div> inside #workspace-map.
+   Real PNG sprites live in static/assets/agents/ and are mapped by role
+   via the `data-role` attribute. Movement between rooms uses the
+   transition on `top`/`left`. Agents always sit above rooms + furniture. */
 .agent {
   position: absolute;
-  width: 22px;
-  height: 22px;
-  background: radial-gradient(circle at 30% 30%, #4ade80 0%, #16a34a 60%, #166534 100%);
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  width: 28px;
+  height: 28px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Subtle drop shadow so agents read clearly on every room tint. */
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
   transition: top 0.6s ease, left 0.6s ease;
-  /* Agents above rooms, furniture, and the map background */
-  z-index: 100;
+  z-index: 50;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Role -> sprite mapping. Each agent JS layer assigns a `data-role`
+   value matching one of these keys. */
+.agent[data-role="dev"],
+.agent[data-role="developer"] {
+  background-image: url("assets/agents/dev.png");
+}
+.agent[data-role="research"],
+.agent[data-role="researcher"],
+.agent[data-role="analyst"] {
+  background-image: url("assets/agents/research.png");
+}
+.agent[data-role="ops"],
+.agent[data-role="devops"],
+.agent[data-role="security"] {
+  background-image: url("assets/agents/ops.png");
+}
+.agent[data-role="manager"],
+.agent[data-role="coordinator"] {
+  background-image: url("assets/agents/manager.png");
+}
+
+/* Status-driven hint: idle fades slightly, busy gets a soft pulse. */
+.agent.status-idle { opacity: 0.7; }
+.agent.status-busy::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 158, 11, 0.6);
+  animation: agent-busy-pulse 1.6s ease-in-out infinite;
   pointer-events: none;
+}
+
+@keyframes agent-busy-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 0;   transform: scale(1.25); }
 }
