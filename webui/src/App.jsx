@@ -1,33 +1,63 @@
 import React, { useState } from 'react';
-import Navbar from './components/Navbar.jsx';
-import Workspace from './components/Workspace.jsx';
+import Navbar from './components/Navbar';
+import Dashboard from './components/Dashboard';
+import AgentPanel from './components/AgentPanel';
+import TasksPanel from './components/TasksPanel';
+import SettingsPanel from './components/SettingsPanel';
+import WorkspaceView from './components/WorkspaceView';
+import FullscreenWorkspace from './components/FullscreenWorkspace';
+import AgentPopup from './components/AgentPopup';
+import { useWorkspaceStore } from './store/workspaceStore';
 
 /**
- * Top-level shell.
+ * Hermes 2D AI Agent Workspace
  *
- * Layout invariant (matches spec):
- *   .navbar     -> position: fixed, top: 0, height: 60px, z-index: 100
- *   .workspace  -> position: absolute, top: 60px, height: calc(100vh - 60px)
+ * A live 2D simulation dashboard where AI agents move autonomously
+ * inside rooms (Engineering, Research Lab, Operations, Meeting).
  *
- * The navbar therefore always wins z-index and is always clickable;
- * the workspace fills everything below it on every screen size.
+ * Architecture:
+ * - PixiJS canvas for 2D rendering
+ * - Zustand for state management
+ * - Autonomous movement system with lerp interpolation
+ * - Sprite-based animated agents
+ * - Mobile-first responsive design
  */
 export default function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeView, setActiveView] = useState('overview');
+  const [activeView, setActiveView] = useState('workspace');
+  const { isFullscreen } = useWorkspaceStore();
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'workspace':
+        return <WorkspaceView />;
+      case 'agents':
+        return <AgentPanel />;
+      case 'tasks':
+        return <TasksPanel />;
+      case 'settings':
+        return <SettingsPanel />;
+      default:
+        return <WorkspaceView />;
+    }
+  };
 
   return (
-    <div className="app">
-      <Navbar
-        active={activeView}
-        onSelect={(view) => {
-          setActiveView(view);
-          setMenuOpen(false);
-        }}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((v) => !v)}
-      />
-      <Workspace />
+    <div className="w-full h-full bg-hermes-dark">
+      {/* Navbar */}
+      <Navbar activeView={activeView} onViewChange={setActiveView} />
+
+      {/* Main content */}
+      {!isFullscreen && (
+        <main className="absolute top-14 left-0 right-0 bottom-0 overflow-hidden">
+          {renderView()}
+        </main>
+      )}
+
+      {/* Fullscreen workspace overlay */}
+      <FullscreenWorkspace />
+
+      {/* Agent info popup */}
+      <AgentPopup />
     </div>
   );
 }
