@@ -1,766 +1,429 @@
-/**
- * Gamified 2D Workspace - Map-Style AI City
- * Transforms workspace zones into an interactive pixel city simulation
- */
+/* ════════════════════════════════════════════════════════════════════════
+   GAMIFIED 2D WORKSPACE CONTROLLER
+   Manages office layout, sprite agents, and workspace interactions
+   ════════════════════════════════════════════════════════════════════════ */
 
-class GamifiedWorkspace {
-  constructor() {
-    this.agents = [
-      {
-        id: 'coordinator',
-        name: 'Coordinator',
-        role: 'coordinator',
-        status: 'online',
-        currentTask: 'Managing team workflows and coordinating tasks across zones',
-        zone: 'operations',
-        avatar: 'C',
-        tasksCompleted: 45,
-        uptime: '12h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'developer-1',
-        name: 'Developer Alpha',
-        role: 'developer',
-        status: 'busy',
-        currentTask: 'Implementing new API endpoints and refactoring core modules',
-        zone: 'engineering',
-        avatar: 'D1',
-        tasksCompleted: 38,
-        uptime: '11h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'developer-2',
-        name: 'Developer Beta',
-        role: 'developer',
-        status: 'online',
-        currentTask: 'Code review and bug fixes for the authentication system',
-        zone: 'engineering',
-        avatar: 'D2',
-        tasksCompleted: 29,
-        uptime: '9h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'devops',
-        name: 'DevOps Engineer',
-        role: 'devops',
-        status: 'online',
-        currentTask: 'Monitoring server performance and deploying updates',
-        zone: 'operations',
-        avatar: 'Ops',
-        tasksCompleted: 22,
-        uptime: '13h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'researcher',
-        name: 'AI Researcher',
-        role: 'researcher',
-        status: 'online',
-        currentTask: 'Analyzing user patterns and training new models',
-        zone: 'research',
-        avatar: 'R',
-        tasksCompleted: 15,
-        uptime: '8h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'analyst',
-        name: 'Data Analyst',
-        role: 'analyst',
-        status: 'busy',
-        currentTask: 'Generating performance reports and metrics dashboards',
-        zone: 'research',
-        avatar: 'A',
-        tasksCompleted: 31,
-        uptime: '10h',
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'security',
-        name: 'Security Specialist',
-        role: 'security',
-        status: 'idle',
-        currentTask: 'Running security audits and vulnerability assessments',
-        zone: 'operations',
-        avatar: 'S',
-        tasksCompleted: 12,
-        uptime: '6h',
-        position: { x: 0, y: 0 }
-      }
-    ];
+(function() {
+  'use strict';
 
-    this.zoomLevel = 1;
-    this.isPaused = false;
-    this.selectedAgent = null;
-    this.movingAgents = new Set();
-    this.animationFrameId = null;
+  // ── Global Workspace State ──
+  const WorkspaceState = {
+    active: false,
+    agents: [],
+    rooms: [],
+    scale: 1,
+    minScale: 0.5,
+    maxScale: 2,
+  };
+
+  // ── Agent Emoji Sprites (fallback for now) ──
+  const AGENT_SPRITES = {
+    'engineering': '🔧',
+    'research': '🔬',
+    'operations': '⚙️',
+    'meeting': '💼',
+    'lounge': '☕',
+    'frontend': '🎨',
+    'backend': '💻',
+    'devops': '🚀',
+    'data': '📊',
+    'security': '🔒',
+    'qa': '🧪',
+    'design': '✏️',
+  };
+
+  // ── Agent Status Types ──
+  const AGENT_STATUS = {
+    IDLE: 'idle',
+    WORKING: 'working',
+    BUSY: 'busy',
+    OFFLINE: 'offline',
+  };
+
+  // ── Default Agents ──
+  const DEFAULT_AGENTS = [
+    { id: 'agent-1', name: 'Alice', role: 'frontend', status: 'working', room: 'engineering', x: 50, y: 50 },
+    { id: 'agent-2', name: 'Bob', role: 'backend', status: 'working', room: 'engineering', x: 150, y: 50 },
+    { id: 'agent-3', name: 'Carol', role: 'research', status: 'idle', room: 'research', x: 50, y: 50 },
+    { id: 'agent-4', name: 'Dave', role: 'devops', status: 'busy', room: 'operations', x: 100, y: 80 },
+    { id: 'agent-5', name: 'Eve', role: 'design', status: 'working', room: 'meeting', x: 80, y: 60 },
+    { id: 'agent-6', name: 'Frank', role: 'qa', status: 'idle', room: 'lounge', x: 120, y: 90 },
+  ];
+
+  // ── Room Definitions ──
+  const ROOMS = [
+    { id: 'engineering', label: 'Engineering', furniture: ['desk', 'desk', 'chair', 'chair'] },
+    { id: 'research', label: 'Research Lab', furniture: ['table', 'chair'] },
+    { id: 'operations', label: 'Operations', furniture: ['desk', 'chair'] },
+    { id: 'meeting', label: 'Meeting Room', furniture: ['table'] },
+    { id: 'lounge', label: 'Lounge', furniture: ['sofa', 'chair'] },
+  ];
+
+  // ══════════════════════════════════════════════════════════════════════
+  // WORKSPACE INITIALIZATION
+  // ══════════════════════════════════════════════════════════════════════
+
+  function initWorkspace() {
+    console.log('[Workspace] Initializing gamified 2D workspace...');
     
-    this.init();
+    // Create workspace HTML structure
+    createWorkspaceHTML();
+    
+    // Initialize agents
+    WorkspaceState.agents = [...DEFAULT_AGENTS];
+    WorkspaceState.rooms = [...ROOMS];
+    
+    // Bind events
+    bindWorkspaceEvents();
+    
+    console.log('[Workspace] Initialization complete');
   }
 
-  init() {
-    console.log('[GamifiedWorkspace] Initializing gamified workspace...');
-    this.setupEventListeners();
-    this.renderAgents();
-    this.startSimulation();
-    this.updateWorkspaceStatus();
-    this.startAnimationLoop();
-  }
-
-  setupEventListeners() {
-    // Workspace controls
-    const zoomInBtn = document.getElementById('zoomInBtn');
-    const zoomOutBtn = document.getElementById('zoomOutBtn');
-    const resetViewBtn = document.getElementById('resetViewBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-
-    if (zoomInBtn) zoomInBtn.addEventListener('click', () => this.zoomIn());
-    if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => this.zoomOut());
-    if (resetViewBtn) resetViewBtn.addEventListener('click', () => this.resetView());
-    if (pauseBtn) pauseBtn.addEventListener('click', () => this.togglePause());
-
-    // Zone interactions
-    document.querySelectorAll('.workspace-zone').forEach(zone => {
-      zone.addEventListener('click', (e) => {
-        if (e.target.closest('.workspace-agent')) return;
-        this.onZoneClick(zone);
-      });
-      
-      zone.addEventListener('mouseenter', () => {
-        if (!zone.classList.contains('zone-highlight')) {
-          zone.style.transform = 'translateY(-4px) scale(1.02)';
-        }
-      });
-      
-      zone.addEventListener('mouseleave', () => {
-        if (!zone.classList.contains('zone-highlight')) {
-          zone.style.transform = '';
-        }
-      });
-    });
-
-    // Mobile touch handling
-    if ('ontouchstart' in window) {
-      document.addEventListener('touchend', () => {
-        // Clear any stuck hover states on mobile
-        document.querySelectorAll('.workspace-zone').forEach(zone => {
-          zone.style.transform = '';
-        });
-      });
+  // ── Create Workspace DOM Structure ──
+  function createWorkspaceHTML() {
+    // Check if workspace already exists
+    if (document.getElementById('workspace-fullscreen')) {
+      console.log('[Workspace] Already exists, skipping creation');
+      return;
     }
 
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.selectedAgent) {
-        this.closeAgentInfo();
+    const workspaceHTML = `
+      <div id="workspace-fullscreen" class="workspace-fullscreen">
+        <!-- Topbar -->
+        <div class="workspace-topbar">
+          <div class="workspace-topbar-title">🏢 Hermes Office HQ</div>
+          <button class="workspace-close-btn" id="workspace-close-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Exit Workspace
+          </button>
+        </div>
+
+        <!-- 2D Map -->
+        <div id="workspace-map">
+          <div class="office-layout" id="office-layout">
+            <!-- Rooms will be dynamically inserted here -->
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="workspace-legend">
+          <div class="workspace-legend-title">Agent Status</div>
+          <div class="workspace-legend-item">
+            <div class="workspace-legend-dot working"></div>
+            <span>Working</span>
+          </div>
+          <div class="workspace-legend-item">
+            <div class="workspace-legend-dot idle"></div>
+            <span>Idle</span>
+          </div>
+          <div class="workspace-legend-item">
+            <div class="workspace-legend-dot busy"></div>
+            <span>Busy</span>
+          </div>
+          <div class="workspace-legend-item">
+            <div class="workspace-legend-dot offline"></div>
+            <span>Offline</span>
+          </div>
+        </div>
+
+        <!-- Zoom Controls -->
+        <div class="workspace-zoom-controls">
+          <button class="workspace-zoom-btn" id="workspace-zoom-in" title="Zoom In">+</button>
+          <button class="workspace-zoom-btn" id="workspace-zoom-reset" title="Reset Zoom">⊙</button>
+          <button class="workspace-zoom-btn" id="workspace-zoom-out" title="Zoom Out">−</button>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', workspaceHTML);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ROOM RENDERING
+  // ══════════════════════════════════════════════════════════════════════
+
+  function renderRooms() {
+    const layout = document.getElementById('office-layout');
+    if (!layout) return;
+
+    layout.innerHTML = '';
+
+    WorkspaceState.rooms.forEach(room => {
+      const roomEl = document.createElement('div');
+      roomEl.className = `room ${room.id}`;
+      roomEl.id = `room-${room.id}`;
+      roomEl.dataset.roomId = room.id;
+
+      // Room label
+      const label = document.createElement('div');
+      label.className = 'room-label';
+      label.textContent = room.label;
+      roomEl.appendChild(label);
+
+      // Add furniture
+      room.furniture.forEach((furnitureType, idx) => {
+        const furniture = document.createElement('div');
+        furniture.className = `furniture ${furnitureType}`;
+        furniture.style.left = `${30 + (idx * 60)}px`;
+        furniture.style.top = `${80 + (idx % 2) * 60}px`;
+        roomEl.appendChild(furniture);
+      });
+
+      layout.appendChild(roomEl);
+    });
+
+    console.log('[Workspace] Rendered', WorkspaceState.rooms.length, 'rooms');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AGENT RENDERING
+  // ══════════════════════════════════════════════════════════════════════
+
+  function renderAgents() {
+    // Remove existing agents
+    document.querySelectorAll('.agent').forEach(el => el.remove());
+
+    WorkspaceState.agents.forEach(agent => {
+      const roomEl = document.getElementById(`room-${agent.room}`);
+      if (!roomEl) {
+        console.warn('[Workspace] Room not found for agent:', agent.room);
+        return;
       }
+
+      const agentEl = document.createElement('div');
+      agentEl.className = `agent status-${agent.status}`;
+      agentEl.id = agent.id;
+      agentEl.dataset.agentId = agent.id;
+      agentEl.style.left = `${agent.x}px`;
+      agentEl.style.top = `${agent.y}px`;
+
+      // Sprite icon
+      const sprite = AGENT_SPRITES[agent.role] || '👤';
+      agentEl.textContent = sprite;
+
+      // Status badge
+      const badge = document.createElement('div');
+      badge.className = 'agent-status-badge';
+      agentEl.appendChild(badge);
+
+      // Tooltip
+      const tooltip = document.createElement('div');
+      tooltip.className = 'agent-tooltip';
+      tooltip.textContent = `${agent.name} (${agent.role})`;
+      agentEl.appendChild(tooltip);
+
+      // Add click handler
+      agentEl.addEventListener('click', () => onAgentClick(agent));
+
+      roomEl.appendChild(agentEl);
     });
 
-    // Responsive positioning on window resize
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        this.renderAgents(); // Re-position agents on resize
-        this.applyZoom(); // Adjust zoom for new screen size
-      }, 150);
-    });
+    console.log('[Workspace] Rendered', WorkspaceState.agents.length, 'agents');
   }
 
-  renderAgents() {
-    // Clear existing agents from workspace-map
-    const workspaceMap = document.getElementById('workspaceMap');
-    if (!workspaceMap) return;
+  // ══════════════════════════════════════════════════════════════════════
+  // AGENT INTERACTIONS
+  // ══════════════════════════════════════════════════════════════════════
+
+  function onAgentClick(agent) {
+    console.log('[Workspace] Agent clicked:', agent);
     
-    // Remove any existing agent elements
-    workspaceMap.querySelectorAll('.workspace-agent').forEach(el => el.remove());
-
-    // Position and render each agent directly in workspace-map
-    this.agents.forEach(agent => {
-      const agentElement = this.createAgentElement(agent);
-      this.positionAgentInWorkspace(agent, agentElement);
-      workspaceMap.appendChild(agentElement);
-    });
-
-    console.log(`[GamifiedWorkspace] Rendered ${this.agents.length} agents in workspace-map`);
+    // Show agent details (could open a modal or side panel)
+    alert(`Agent: ${agent.name}\nRole: ${agent.role}\nStatus: ${agent.status}\nRoom: ${agent.room}`);
+    
+    // Optional: trigger status change or movement
+    // cycleAgentStatus(agent);
   }
 
-  positionAgentInWorkspace(agent, agentElement) {
-    // Get workspace map dimensions for responsive positioning
-    const workspaceMap = document.getElementById('workspaceMap');
-    if (!workspaceMap) return;
+  function cycleAgentStatus(agent) {
+    const statuses = [AGENT_STATUS.IDLE, AGENT_STATUS.WORKING, AGENT_STATUS.BUSY, AGENT_STATUS.OFFLINE];
+    const currentIndex = statuses.indexOf(agent.status);
+    const nextIndex = (currentIndex + 1) % statuses.length;
+    agent.status = statuses[nextIndex];
+    
+    renderAgents();
+    console.log('[Workspace] Agent status changed:', agent.name, '→', agent.status);
+  }
 
-    const mapRect = workspaceMap.getBoundingClientRect();
-    const mapWidth = mapRect.width;
-    const mapHeight = mapRect.height;
-    const isMobile = window.innerWidth <= 767;
+  function moveAgent(agentId, targetRoom) {
+    const agent = WorkspaceState.agents.find(a => a.id === agentId);
+    if (!agent) return;
 
-    // Position agents directly in workspace-map based on their zone
-    // with small random offsets inside room boundaries.
-    //
-    // Two layout modes:
-    //   - Mobile: percentage-based floor plan (matches the .workspace-zone
-    //             rules: 5% margins, 40%x40% corner rooms, 20% lounge).
-    //   - Desktop: fixed-pixel layout (existing behaviour).
-    let zonePos;
-    if (isMobile) {
-      const rooms = {
-        engineering: { x: 0.05, y: 0.05, w: 0.40, h: 0.40 },
-        research:    { x: 0.55, y: 0.05, w: 0.40, h: 0.40 },
-        operations:  { x: 0.05, y: 0.55, w: 0.40, h: 0.40 },
-        meeting:     { x: 0.55, y: 0.55, w: 0.40, h: 0.40 },
-        lounge:      { x: 0.40, y: 0.40, w: 0.20, h: 0.20 },
-      };
-      const r = rooms[agent.zone] || rooms.operations;
-      const pad = 12; // keep sprites away from the wall
-      zonePos = {
-        baseX: r.x * mapWidth + pad,
-        baseY: r.y * mapHeight + pad,
-        maxX: (r.x + r.w) * mapWidth - pad,
-        maxY: (r.y + r.h) * mapHeight - pad,
-      };
+    const oldRoom = agent.room;
+    agent.room = targetRoom;
+    
+    // Reset position in new room
+    agent.x = 50 + Math.random() * 100;
+    agent.y = 50 + Math.random() * 80;
+    
+    renderAgents();
+    console.log('[Workspace] Agent moved:', agent.name, oldRoom, '→', targetRoom);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // WORKSPACE CONTROLS
+  // ══════════════════════════════════════════════════════════════════════
+
+  function openWorkspace() {
+    const workspace = document.getElementById('workspace-fullscreen');
+    if (!workspace) {
+      console.error('[Workspace] Workspace element not found');
+      return;
+    }
+
+    WorkspaceState.active = true;
+    workspace.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Render rooms and agents
+    renderRooms();
+    renderAgents();
+
+    console.log('[Workspace] Opened fullscreen workspace');
+  }
+
+  function closeWorkspace() {
+    const workspace = document.getElementById('workspace-fullscreen');
+    if (!workspace) return;
+
+    WorkspaceState.active = false;
+    workspace.classList.remove('active');
+    document.body.style.overflow = '';
+
+    console.log('[Workspace] Closed workspace');
+  }
+
+  function toggleWorkspace() {
+    if (WorkspaceState.active) {
+      closeWorkspace();
     } else {
-      const zonePositions = {
-        engineering: {
-          baseX: 80 + 50,
-          baseY: 80 + 60,
-          maxX: 80 + 340 - 50,
-          maxY: 80 + 260 - 50,
-        },
-        research: {
-          baseX: Math.max(mapWidth - 80 - 340 + 50, 450),
-          baseY: 80 + 60,
-          maxX: Math.max(mapWidth - 80 - 50, 500),
-          maxY: 80 + 260 - 50,
-        },
-        operations: {
-          baseX: 80 + 50,
-          baseY: Math.max(mapHeight - 200 - 260 + 60, 400),
-          maxX: 80 + 340 - 50,
-          maxY: Math.max(mapHeight - 200 - 50, 450),
-        },
-        meeting: {
-          baseX: Math.max(mapWidth - 80 - 340 + 50, 450),
-          baseY: Math.max(mapHeight - 200 - 260 + 60, 400),
-          maxX: Math.max(mapWidth - 80 - 50, 500),
-          maxY: Math.max(mapHeight - 200 - 50, 450),
-        },
-        lounge: {
-          baseX: Math.max((mapWidth / 2) - 210 + 50, 150),
-          baseY: Math.max(mapHeight - 80 - 120 + 40, 500),
-          maxX: Math.max((mapWidth / 2) + 210 - 50, 300),
-          maxY: Math.max(mapHeight - 80 - 40, 550),
-        },
-      };
-      zonePos = zonePositions[agent.zone];
+      openWorkspace();
     }
-
-    if (!zonePos) {
-      console.warn(`No position defined for zone: ${agent.zone}`);
-      return;
-    }
-
-    // Add small random offset within room boundaries (±20px)
-    const randomOffsetX = (Math.random() - 0.5) * 40; // -20 to +20
-    const randomOffsetY = (Math.random() - 0.5) * 40; // -20 to +20
-
-    // Calculate final position
-    let finalX = zonePos.baseX + randomOffsetX;
-    let finalY = zonePos.baseY + randomOffsetY;
-
-    // Ensure agent stays within room boundaries
-    const size = isMobile ? 28 : 32;
-    finalX = Math.max(zonePos.baseX, Math.min(finalX, zonePos.maxX - size));
-    finalY = Math.max(zonePos.baseY, Math.min(finalY, zonePos.maxY - size));
-
-    // Apply positioning with CSS attributes for sprite rendering
-    agentElement.style.position = 'absolute';
-    agentElement.style.left = `${finalX}px`;
-    agentElement.style.top = `${finalY}px`;
-    agentElement.setAttribute('data-zone', agent.zone);
-
-    // Store position for future reference
-    agent.position = { x: finalX, y: finalY };
   }
 
-  createAgentElement(agent) {
-    const agentDiv = document.createElement('div');
-    agentDiv.className = `workspace-agent ${agent.role} status-${agent.status}`;
+  // ── Zoom Controls ──
+  function zoomIn() {
+    const layout = document.getElementById('office-layout');
+    if (!layout) return;
 
-    // Use sprite-based rendering - text will be hidden by CSS for sprite roles
-    const avatarText = this.getAgentAvatar(agent);
-    agentDiv.textContent = avatarText;
-    agentDiv.title = `${agent.name} - ${agent.status}`;
-    agentDiv.dataset.agentId = agent.id;
-    agentDiv.dataset.name = agent.name; // For label display
-    agentDiv.dataset.zone = agent.zone; // For CSS positioning
-    // data-role drives sprite lookup in gamified-workspace.css (mobile),
-    // so the same role string used as a class is also stamped here.
-    agentDiv.dataset.role = agent.role;
-    agentDiv.tabIndex = 0; // Make keyboard accessible
+    WorkspaceState.scale = Math.min(WorkspaceState.scale + 0.2, WorkspaceState.maxScale);
+    layout.style.transform = `scale(${WorkspaceState.scale})`;
+    console.log('[Workspace] Zoom in:', WorkspaceState.scale);
+  }
 
-    // Event handlers
-    agentDiv.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.selectAgent(agent);
-    });
+  function zoomOut() {
+    const layout = document.getElementById('office-layout');
+    if (!layout) return;
 
-    agentDiv.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.selectAgent(agent);
+    WorkspaceState.scale = Math.max(WorkspaceState.scale - 0.2, WorkspaceState.minScale);
+    layout.style.transform = `scale(${WorkspaceState.scale})`;
+    console.log('[Workspace] Zoom out:', WorkspaceState.scale);
+  }
+
+  function zoomReset() {
+    const layout = document.getElementById('office-layout');
+    if (!layout) return;
+
+    WorkspaceState.scale = 1;
+    layout.style.transform = `scale(1)`;
+    console.log('[Workspace] Zoom reset');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // EVENT BINDINGS
+  // ══════════════════════════════════════════════════════════════════════
+
+  function bindWorkspaceEvents() {
+    // Close button
+    const closeBtn = document.getElementById('workspace-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeWorkspace);
+    }
+
+    // Zoom controls
+    const zoomInBtn = document.getElementById('workspace-zoom-in');
+    const zoomOutBtn = document.getElementById('workspace-zoom-out');
+    const zoomResetBtn = document.getElementById('workspace-zoom-reset');
+
+    if (zoomInBtn) zoomInBtn.addEventListener('click', zoomIn);
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
+    if (zoomResetBtn) zoomResetBtn.addEventListener('click', zoomReset);
+
+    // Escape key to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && WorkspaceState.active) {
+        closeWorkspace();
       }
     });
 
-    // Enhanced touch handling for mobile
-    if ('ontouchstart' in window) {
-      let touchStartTime;
-      let touchMoved = false;
-      
-      agentDiv.addEventListener('touchstart', (e) => {
-        touchStartTime = Date.now();
-        touchMoved = false;
-        // Add visual feedback
-        agentDiv.style.transform = 'scale(1.1)';
-      });
-      
-      agentDiv.addEventListener('touchmove', () => {
-        touchMoved = true;
-        agentDiv.style.transform = '';
-      });
-      
-      agentDiv.addEventListener('touchend', (e) => {
-        agentDiv.style.transform = '';
-        if (!touchMoved && Date.now() - touchStartTime < 300) { // Quick tap
-          e.preventDefault();
-          this.selectAgent(agent);
+    console.log('[Workspace] Events bound');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AUTO-MOVEMENT SIMULATION (Optional)
+  // ══════════════════════════════════════════════════════════════════════
+
+  function startAgentSimulation() {
+    setInterval(() => {
+      if (!WorkspaceState.active) return;
+
+      // Randomly move an agent
+      const randomAgent = WorkspaceState.agents[Math.floor(Math.random() * WorkspaceState.agents.length)];
+      if (randomAgent && Math.random() > 0.7) {
+        const rooms = ['engineering', 'research', 'operations', 'meeting', 'lounge'];
+        const newRoom = rooms[Math.floor(Math.random() * rooms.length)];
+        moveAgent(randomAgent.id, newRoom);
+      }
+
+      // Randomly change status
+      if (Math.random() > 0.8) {
+        const randomAgent = WorkspaceState.agents[Math.floor(Math.random() * WorkspaceState.agents.length)];
+        if (randomAgent) {
+          cycleAgentStatus(randomAgent);
         }
-      });
-      
-      agentDiv.addEventListener('touchcancel', () => {
-        agentDiv.style.transform = '';
-      });
-    }
-
-    return agentDiv;
-  }
-
-  getAgentAvatar(agent) {
-    // For sprite-based agents, we still need fallback text
-    // The CSS will handle showing sprites and hiding text
-    const roleEmojis = {
-      coordinator: '👑',
-      developer: '💻', 
-      devops: '⚙️',
-      researcher: '🔬',
-      analyst: '📊',
-      security: '🛡️'
-    };
-
-    // Use emoji if available, otherwise use meaningful initials
-    if (roleEmojis[agent.role]) {
-      return roleEmojis[agent.role];
-    }
-
-    // Enhanced fallback to role-based initials
-    const roleInitials = {
-      coordinator: 'CO',
-      developer: agent.name.includes('Alpha') ? 'D1' : 'D2',
-      devops: 'DO',
-      researcher: 'RS',
-      analyst: 'AN',
-      security: 'SC'
-    };
-
-    return roleInitials[agent.role] || agent.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  }
-
-  selectAgent(agent) {
-    this.selectedAgent = agent;
-    this.showAgentInfo(agent);
-    
-    // Visual selection feedback
-    document.querySelectorAll('.workspace-agent').forEach(el => {
-      el.classList.remove('selected');
-    });
-    
-    const agentElement = document.querySelector(`[data-agent-id="${agent.id}"]`);
-    if (agentElement) {
-      agentElement.classList.add('selected');
-      agentElement.focus();
-    }
-  }
-
-  showAgentInfo(agent) {
-    const panel = document.getElementById('agentInfoPanel');
-    const avatar = document.getElementById('selectedAgentAvatar');
-    const name = document.getElementById('selectedAgentName');
-    const role = document.getElementById('selectedAgentRole');
-    const status = document.getElementById('selectedAgentStatus');
-    const task = document.getElementById('selectedAgentTask');
-    const tasks = document.getElementById('selectedAgentTasks');
-    const uptime = document.getElementById('selectedAgentUptime');
-
-    if (!panel) return;
-
-    // Set avatar styling
-    if (avatar) {
-      avatar.textContent = agent.avatar;
-      avatar.className = `agent-info-avatar ${agent.role}`;
-    }
-
-    // Set info text
-    if (name) name.textContent = agent.name;
-    if (role) role.textContent = agent.role.charAt(0).toUpperCase() + agent.role.slice(1);
-    if (status) {
-      status.textContent = agent.status.charAt(0).toUpperCase() + agent.status.slice(1);
-      status.className = `agent-info-status ${agent.status}`;
-    }
-    if (task) task.textContent = agent.currentTask;
-    if (tasks) tasks.textContent = agent.tasksCompleted;
-    if (uptime) uptime.textContent = agent.uptime;
-
-    panel.style.display = 'block';
-    
-    // Ensure panel is visible on mobile
-    if (window.innerWidth <= 768) {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-
-  closeAgentInfo() {
-    const panel = document.getElementById('agentInfoPanel');
-    if (panel) {
-      panel.style.display = 'none';
-    }
-    
-    // Remove selection highlight
-    document.querySelectorAll('.workspace-agent').forEach(el => {
-      el.classList.remove('selected');
-    });
-    
-    this.selectedAgent = null;
-  }
-
-  onZoneClick(zone) {
-    const zoneName = zone.id.replace('zone-', '');
-    const agentsInZone = this.agents.filter(agent => agent.zone === zoneName);
-    
-    console.log(`[GamifiedWorkspace] Zone clicked: ${zoneName}, Agents: ${agentsInZone.length}`);
-    
-    // Add highlight animation
-    zone.classList.add('zone-highlight');
-    setTimeout(() => {
-      zone.classList.remove('zone-highlight');
-    }, 1000);
-  }
-
-  moveAgentToZone(agent, newZone) {
-    if (this.movingAgents.has(agent.id)) return; // Already moving
-
-    const oldZone = agent.zone;
-    if (oldZone === newZone) return;
-
-    this.movingAgents.add(agent.id);
-    
-    // Update agent data
-    agent.zone = newZone;
-    
-    // Get agent element
-    const agentElement = document.querySelector(`[data-agent-id="${agent.id}"]`);
-    if (agentElement) {
-      agentElement.classList.add('moving');
-      
-      // Enhanced trail effect for movement
-      agentElement.classList.add('agent-trail');
-      setTimeout(() => {
-        agentElement.classList.remove('agent-trail');
-      }, 1200);
-    }
-
-    // Re-position agent with smooth transition
-    setTimeout(() => {
-      if (agentElement) {
-        // Calculate new position
-        this.positionAgentInWorkspace(agent, agentElement);
-        
-        // Update zone data attribute
-        agentElement.setAttribute('data-zone', newZone);
-        
-        this.movingAgents.delete(agent.id);
-        agentElement.classList.remove('moving');
-        
-        console.log(`[GamifiedWorkspace] ${agent.name} moved from ${oldZone} to ${newZone}`);
       }
-    }, 600);
+    }, 5000); // Every 5 seconds
   }
 
-  // Enhanced zoom functionality with mobile considerations
-  applyZoom() {
-    const map = document.getElementById('workspaceMap');
-    if (!map) return;
+  // ══════════════════════════════════════════════════════════════════════
+  // PUBLIC API
+  // ══════════════════════════════════════════════════════════════════════
 
-    // Disable zoom on mobile to prevent layout issues
-    if (window.innerWidth <= 768) {
-      map.style.transform = 'none';
-      return;
-    }
-
-    map.style.transform = `scale(${this.zoomLevel})`;
-    map.style.transformOrigin = 'center';
-    
-    // Adjust container scrolling if needed
-    const container = map.closest('.workspace-2d-container');
-    if (container && this.zoomLevel > 1) {
-      container.style.overflow = 'auto';
-    } else if (container) {
-      container.style.overflow = 'hidden';
-    }
-  }
-
-  startSimulation() {
-    if (this.isPaused) return;
-
-    // Agent status changes every 30 seconds
-    setInterval(() => {
-      if (this.isPaused) return;
-      this.simulateAgentActivity();
-    }, 30000);
-
-    // Agent task updates every 2 minutes
-    setInterval(() => {
-      if (this.isPaused) return;
-      this.updateAgentTasks();
-    }, 120000);
-
-    // Occasional agent movements every 5 minutes
-    setInterval(() => {
-      if (this.isPaused) return;
-      this.simulateAgentMovement();
-    }, 300000);
-  }
-
-  simulateAgentActivity() {
-    // Randomly change some agent statuses
-    const activeAgents = this.agents.filter(agent => 
-      agent.status !== 'idle' && !this.movingAgents.has(agent.id)
-    );
-    
-    if (activeAgents.length > 0) {
-      const randomAgent = activeAgents[Math.floor(Math.random() * activeAgents.length)];
-      const statuses = ['online', 'busy'];
-      const newStatus = statuses[Math.random() > 0.5 ? 0 : 1];
-      
-      if (randomAgent.status !== newStatus) {
-        randomAgent.status = newStatus;
-        this.updateAgentDisplay(randomAgent);
-        console.log(`[GamifiedWorkspace] ${randomAgent.name} status changed to ${newStatus}`);
+  window.GamifiedWorkspace = {
+    init: initWorkspace,
+    open: openWorkspace,
+    close: closeWorkspace,
+    toggle: toggleWorkspace,
+    addAgent: (agent) => {
+      WorkspaceState.agents.push(agent);
+      if (WorkspaceState.active) renderAgents();
+    },
+    removeAgent: (agentId) => {
+      WorkspaceState.agents = WorkspaceState.agents.filter(a => a.id !== agentId);
+      if (WorkspaceState.active) renderAgents();
+    },
+    updateAgent: (agentId, updates) => {
+      const agent = WorkspaceState.agents.find(a => a.id === agentId);
+      if (agent) {
+        Object.assign(agent, updates);
+        if (WorkspaceState.active) renderAgents();
       }
-    }
+    },
+    getState: () => WorkspaceState,
+    startSimulation: startAgentSimulation,
+  };
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AUTO-INIT ON DOM READY
+  // ══════════════════════════════════════════════════════════════════════
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWorkspace);
+  } else {
+    initWorkspace();
   }
 
-  simulateAgentMovement() {
-    // Occasionally move an agent to meeting or lounge
-    if (Math.random() > 0.7) {
-      const workingAgents = this.agents.filter(agent => 
-        agent.zone !== 'meeting' && 
-        agent.zone !== 'lounge' && 
-        !this.movingAgents.has(agent.id)
-      );
-      
-      if (workingAgents.length === 0) return;
-
-      const randomAgent = workingAgents[Math.floor(Math.random() * workingAgents.length)];
-      const originalZone = randomAgent.zone;
-      const destination = Math.random() > 0.5 ? 'meeting' : 'lounge';
-      
-      // Move to destination
-      randomAgent.currentTask = destination === 'meeting' 
-        ? 'Attending team meeting' 
-        : 'Taking a break';
-      randomAgent.status = 'busy';
-      
-      this.moveAgentToZone(randomAgent, destination);
-      
-      // Return after some time
-      setTimeout(() => {
-        if (!this.movingAgents.has(randomAgent.id)) {
-          randomAgent.status = 'online';
-          this.updateAgentTask(randomAgent);
-          this.moveAgentToZone(randomAgent, originalZone);
-        }
-      }, 180000 + Math.random() * 120000); // 3-5 minutes
-    }
-  }
-
-  updateAgentTasks() {
-    this.agents.forEach(agent => {
-      if (agent.status === 'busy' || agent.status === 'online') {
-        agent.tasksCompleted += Math.floor(Math.random() * 3);
-        
-        // Update uptime
-        const currentUptime = parseInt(agent.uptime.replace('h', ''));
-        agent.uptime = `${currentUptime + Math.floor(Math.random() * 2)}h`;
-      }
-    });
-
-    // Update displayed info if an agent is selected
-    if (this.selectedAgent) {
-      this.showAgentInfo(this.selectedAgent);
-    }
-
-    this.updateWorkspaceStatus();
-  }
-
-  updateAgentTask(agent) {
-    const tasks = {
-      coordinator: ['Managing team workflows', 'Coordinating cross-zone activities', 'Planning sprint objectives'],
-      developer: ['Implementing features', 'Code review and testing', 'Debugging system issues', 'Refactoring modules'],
-      devops: ['Server maintenance', 'Deployment monitoring', 'Infrastructure scaling', 'Security updates'],
-      researcher: ['Data analysis', 'Model training', 'Research documentation', 'Experiment design'],
-      analyst: ['Performance metrics', 'Report generation', 'Data visualization', 'Trend analysis'],
-      security: ['Security audit', 'Vulnerability scanning', 'Compliance checks', 'Threat monitoring']
-    };
-
-    const roleTasks = tasks[agent.role] || ['General tasks'];
-    agent.currentTask = roleTasks[Math.floor(Math.random() * roleTasks.length)];
-  }
-
-  updateAgentDisplay(agent) {
-    const agentElement = document.querySelector(`[data-agent-id="${agent.id}"]`);
-    if (agentElement) {
-      agentElement.className = `workspace-agent ${agent.role} status-${agent.status}`;
-      if (this.selectedAgent && this.selectedAgent.id === agent.id) {
-        agentElement.classList.add('selected');
-      }
-    }
-  }
-
-  updateWorkspaceStatus() {
-    const statusElement = document.getElementById('workspaceStatus');
-    if (!statusElement) return;
-
-    const activeAgents = this.agents.filter(agent => agent.status !== 'idle').length;
-    const totalAgents = this.agents.length;
-    
-    statusElement.textContent = `${activeAgents}/${totalAgents} AGENTS ACTIVE`;
-    
-    // Update zone statuses
-    document.querySelectorAll('.workspace-zone').forEach(zone => {
-      const zoneName = zone.id.replace('zone-', '');
-      const zoneAgents = this.agents.filter(agent => agent.zone === zoneName);
-      const activeInZone = zoneAgents.filter(agent => agent.status !== 'idle').length;
-      
-      const statusDot = zone.querySelector('.zone-status');
-      if (statusDot) {
-        statusDot.className = activeInZone > 0 ? 'zone-status active' : 'zone-status idle';
-      }
-    });
-  }
-
-  startAnimationLoop() {
-    const animate = () => {
-      if (!this.isPaused) {
-        // Add subtle animations and updates here if needed
-        this.updateWorkspaceStatus();
-      }
-      
-      this.animationFrameId = requestAnimationFrame(animate);
-    };
-    
-    animate();
-  }
-
-  zoomIn() {
-    this.zoomLevel = Math.min(this.zoomLevel + 0.1, 2);
-    this.applyZoom();
-  }
-
-  zoomOut() {
-    this.zoomLevel = Math.max(this.zoomLevel - 0.1, 0.5);
-    this.applyZoom();
-  }
-
-  resetView() {
-    this.zoomLevel = 1;
-    this.applyZoom();
-  }
-
-  applyZoom() {
-    const map = document.getElementById('workspaceMap');
-    if (map) {
-      map.style.transform = `scale(${this.zoomLevel})`;
-      map.style.transformOrigin = 'center';
-      
-      // Adjust container scrolling if needed
-      const container = map.closest('.workspace-2d-container');
-      if (container && this.zoomLevel > 1) {
-        container.style.overflow = 'auto';
-      } else if (container) {
-        container.style.overflow = 'hidden';
-      }
-    }
-  }
-
-  togglePause() {
-    this.isPaused = !this.isPaused;
-    const pauseBtn = document.getElementById('pauseBtn');
-    
-    if (pauseBtn) {
-      if (this.isPaused) {
-        pauseBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-        pauseBtn.title = 'Resume Simulation';
-      } else {
-        pauseBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
-        pauseBtn.title = 'Pause Simulation';
-      }
-    }
-
-    console.log(`[GamifiedWorkspace] Simulation ${this.isPaused ? 'paused' : 'resumed'}`);
-  }
-
-  destroy() {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
-    this.movingAgents.clear();
-    console.log('[GamifiedWorkspace] Workspace destroyed');
-  }
-}
-
-// Global function for closing agent info
-function closeAgentInfo() {
-  if (window.gamifiedWorkspace) {
-    window.gamifiedWorkspace.closeAgentInfo();
-  }
-}
-
-// Initialize the gamified workspace
-function initGamifiedWorkspace() {
-  console.log('[GamifiedWorkspace] Initializing...');
-  
-  // Clean up existing instance
-  if (window.gamifiedWorkspace) {
-    window.gamifiedWorkspace.destroy();
-  }
-  
-  window.gamifiedWorkspace = new GamifiedWorkspace();
-}
-
-// Auto-initialize when panel is shown
-function loadOffice() {
-  console.log('[dashboard] Loading gamified office workspace...');
-  
-  // Small delay to ensure DOM is ready
-  setTimeout(() => {
-    initGamifiedWorkspace();
-  }, 100);
-}
-
-// Export for manual initialization if needed
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = GamifiedWorkspace;
-}
+})();

@@ -1,1273 +1,514 @@
-/* ===== 2D OFFICE MAP ===== */
-.workspace-2d-container {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background: 
-    /* Office floor pattern */
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.02) 0px,
-      rgba(255, 255, 255, 0.02) 1px,
-      transparent 1px,
-      transparent 20px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      rgba(255, 255, 255, 0.02) 0px,
-      rgba(255, 255, 255, 0.02) 1px,
-      transparent 1px,
-      transparent 20px
-    ),
-    /* Grid pattern for office floor */
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 49px,
-      rgba(255, 255, 255, 0.03) 50px,
-      rgba(255, 255, 255, 0.03) 51px,
-      transparent 52px
-    ),
-    repeating-linear-gradient(
-      180deg,
-      transparent,
-      transparent 49px,
-      rgba(255, 255, 255, 0.03) 50px,
-      rgba(255, 255, 255, 0.03) 51px,
-      transparent 52px
-    ),
-    /* Subtle ambient lighting */
-    radial-gradient(ellipse at top left, rgba(59, 130, 246, 0.05) 0%, transparent 60%),
-    radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.05) 0%, transparent 60%),
-    var(--bg-primary);
-  min-height: 100vh;
+/* ════════════════════════════════════════════════════════════════════════
+   GAMIFIED 2D WORKSPACE — Office Layout with Sprite Agents
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Mobile-First: Prevent Horizontal Overflow ── */
+* {
+  box-sizing: border-box;
 }
 
-.workspace-map {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 800px;
-  padding: var(--space-8);
-  transform-origin: center;
-  transition: transform var(--transition-normal);
-  /* Use absolute positioning for office layout */
-  display: block;
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
-/* ===== OFFICE ZONES - POSITIONED LIKE ROOMS ===== */
-.workspace-zone {
-  position: absolute;
-  background: var(--bg-secondary);
-  border: 3px solid var(--border-light);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  transition: all var(--transition-normal);
-  cursor: pointer;
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  /* Office room styling */
-  backdrop-filter: blur(2px);
-}
-
-.workspace-zone:hover {
-  transform: translateY(-2px) scale(1.01);
-  box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.15),
-    0 0 20px rgba(var(--color-primary-rgb), 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-/* OFFICE LAYOUT - REALISTIC SPATIAL POSITIONING WITH HALLWAYS */
-/* Engineering Room - Top Left with proper spacing */
-.workspace-zone.engineering {
-  top: 80px;
-  left: 80px;
-  width: 340px;
-  height: 260px;
-  border-color: var(--color-primary);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(var(--color-primary-rgb), 0.08) 100%);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.12),
-    0 0 24px rgba(var(--color-primary-rgb), 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  /* Add wall effect */
-  border-width: 4px;
-  border-style: solid;
-}
-
-/* Research Room - Top Right with hallway space */
-.workspace-zone.research {
-  top: 80px;
-  right: 80px;
-  width: 340px;
-  height: 260px;
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(16, 185, 129, 0.08) 100%);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.12),
-    0 0 24px rgba(16, 185, 129, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-width: 4px;
-  border-style: solid;
-}
-
-/* Operations Room - Bottom Left with hallway space */
-.workspace-zone.operations {
-  bottom: 200px;
-  left: 80px;
-  width: 340px;
-  height: 260px;
-  border-color: var(--color-warning);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(245, 158, 11, 0.08) 100%);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.12),
-    0 0 24px rgba(245, 158, 11, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-width: 4px;
-  border-style: solid;
-}
-
-/* Meeting Room - Bottom Right with hallway space */
-.workspace-zone.meeting {
-  bottom: 200px;
-  right: 80px;
-  width: 340px;
-  height: 260px;
-  border-color: var(--color-purple);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(139, 92, 246, 0.08) 100%);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.12),
-    0 0 24px rgba(139, 92, 246, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-width: 4px;
-  border-style: solid;
-}
-
-/* Lounge - Center with proper clearance */
-.workspace-zone.lounge {
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 420px;
-  height: 120px;
-  border-color: var(--color-pink);
-  background: linear-gradient(135deg, 
-    var(--bg-secondary) 0%, 
-    rgba(236, 72, 153, 0.08) 100%);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.12),
-    0 0 24px rgba(236, 72, 153, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-width: 4px;
-  border-style: solid;
-}
-
-/* Add hallway indicators */
-.workspace-map::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  background: 
-    radial-gradient(circle, 
-      rgba(255, 255, 255, 0.04) 0%, 
-      transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Add corner hallway connections */
-.workspace-map::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: 
-    /* Vertical hallway */
-    linear-gradient(90deg, 
-      transparent 0%, 
-      transparent calc(50% - 40px), 
-      rgba(255, 255, 255, 0.02) calc(50% - 40px),
-      rgba(255, 255, 255, 0.02) calc(50% + 40px),
-      transparent calc(50% + 40px),
-      transparent 100%
-    ),
-    /* Horizontal hallway */
-    linear-gradient(180deg, 
-      transparent 0%, 
-      transparent calc(50% - 40px), 
-      rgba(255, 255, 255, 0.02) calc(50% - 40px),
-      rgba(255, 255, 255, 0.02) calc(50% + 40px),
-      transparent calc(50% + 40px),
-      transparent 100%
-    );
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ===== ZONE HEADERS ===== */
-.zone-header {
-  position: absolute;
+/* ── Fullscreen Workspace Container ── */
+.workspace-fullscreen {
+  position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  padding: var(--space-4);
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 200;
+  background: #0b0f1a;
+  display: none;
+  overflow: hidden;
+}
+
+.workspace-fullscreen.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Workspace Topbar ── */
+.workspace-topbar {
+  position: relative;
+  z-index: 201;
+  height: 60px;
+  width: 100%;
+  background: rgba(13, 13, 26, 0.95);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  z-index: 2;
+  padding: 0 20px;
+  flex-shrink: 0;
 }
 
-.zone-header h3 {
-  font-size: 16px;
+.workspace-topbar-title {
+  font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  color: #FFD700;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
-/* Status Indicators */
-.zone-status {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--color-gray-400);
-  transition: all var(--transition-normal);
-  position: relative;
+.workspace-close-btn {
+  padding: 10px 20px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  color: #FFD700;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.zone-status::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  transform: translate(-50%, -50%);
-  opacity: 0.6;
+.workspace-close-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
 }
 
-.zone-status.active {
-  background: var(--color-success);
-  box-shadow: 
-    0 0 16px rgba(16, 185, 129, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  animation: pulse-glow 2s ease-in-out infinite alternate;
-}
-
-.zone-status.idle {
-  background: var(--color-gray-400);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-@keyframes pulse-glow {
-  from {
-    box-shadow: 
-      0 0 16px rgba(16, 185, 129, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
-  to {
-    box-shadow: 
-      0 0 24px rgba(16, 185, 129, 0.7),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  }
-}
-
-/* ===== ZONE CONTENT ===== */
-.zone-content {
+/* ── 2D Workspace Map ── */
+#workspace-map {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: calc(var(--space-8) + var(--space-6)) var(--space-4) var(--space-4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  background: #0f1419;
+  background-image: 
+    linear-gradient(rgba(255, 215, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 215, 0, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: center center;
 }
 
-/* Furniture Elements - Enhanced Office Style */
-.zone-furniture {
+/* ── Floor Plan Container ── */
+.office-layout {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.workstation, .lab-bench, .server-rack, .conference-table, 
-.couch, .monitoring-desk, .whiteboard, .coffee-table {
-  position: absolute;
-  background: var(--bg-tertiary);
-  border: 2px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  opacity: 0.5;
-  box-shadow: 
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: opacity 0.3s ease;
-}
-
-/* Engineering Room Furniture */
-.workspace-zone.engineering .workstation {
-  width: 60px;
-  height: 30px;
-  top: 30%;
-  left: 15%;
-  background: linear-gradient(135deg, var(--color-gray-700) 0%, var(--color-gray-600) 100%);
-  border-color: var(--color-primary);
-}
-
-.workspace-zone.engineering .workstation:nth-child(2) {
-  top: 30%;
-  right: 15%;
-  left: auto;
-}
-
-.workspace-zone.engineering .whiteboard {
-  width: 80px;
-  height: 15px;
-  top: 60%;
-  right: 15%;
-  background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-tertiary) 100%);
-  border-color: var(--color-gray-500);
-}
-
-/* Research Room Furniture */
-.workspace-zone.research .lab-bench {
-  width: 90px;
-  height: 25px;
-  bottom: 25%;
-  left: 15%;
-  background: linear-gradient(135deg, var(--color-blue-700) 0%, var(--color-blue-600) 100%);
-  border-color: var(--color-success);
-}
-
-.workspace-zone.research .whiteboard {
-  width: 70px;
-  height: 12px;
-  top: 25%;
-  right: 15%;
-  background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-tertiary) 100%);
-  border-color: var(--color-success);
-}
-
-/* Operations Room Furniture */
-.workspace-zone.operations .server-rack {
-  width: 30px;
-  height: 80px;
-  top: 20%;
-  left: 20%;
-  background: linear-gradient(135deg, var(--color-gray-800) 0%, var(--color-gray-700) 100%);
-  border-color: var(--color-warning);
-}
-
-.workspace-zone.operations .monitoring-desk {
-  width: 50px;
-  height: 40px;
-  bottom: 20%;
-  right: 20%;
-  background: linear-gradient(135deg, var(--color-gray-700) 0%, var(--color-gray-600) 100%);
-  border-color: var(--color-warning);
-}
-
-/* Meeting Room Furniture */
-.workspace-zone.meeting .conference-table {
-  width: 120px;
-  height: 70px;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-brown-700) 0%, var(--color-brown-600) 100%);
-  border-color: var(--color-purple);
-}
-
-/* Lounge Furniture */
-.workspace-zone.lounge .couch {
-  width: 80px;
-  height: 40px;
-  top: 30%;
-  left: 20%;
-  background: linear-gradient(135deg, var(--color-indigo-700) 0%, var(--color-indigo-600) 100%);
-  border-radius: var(--radius-md);
-  border-color: var(--color-pink);
-}
-
-.workspace-zone.lounge .coffee-table {
-  width: 50px;
-  height: 30px;
-  bottom: 25%;
-  right: 25%;
-  background: linear-gradient(135deg, var(--color-brown-600) 0%, var(--color-brown-500) 100%);
-  border-radius: var(--radius-sm);
-  border-color: var(--color-pink);
-}
-
-/* Hover effects for furniture */
-.workspace-zone:hover .zone-furniture > * {
-  opacity: 0.7;
-}
-
-/* ===== AGENT CONTAINERS ===== */
-.agent-container {
-  position: relative;
   width: 100%;
   height: 100%;
+  min-width: 1200px;
+  min-height: 800px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
   flex-wrap: wrap;
-  z-index: 5;
+  gap: 40px;
+  padding: 60px;
+  align-content: center;
+  justify-content: center;
+  transform-origin: center;
 }
 
-/* ===== AGENT AVATARS - SPRITE BASED ===== */
-.workspace-agent {
+/* ── Room Base Styles ── */
+.room {
+  position: relative;
+  border: 3px solid #2a2f45;
+  background: linear-gradient(135deg, #111827 0%, #1a1d2e 100%);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.room:hover {
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(255, 215, 0, 0.15);
+}
+
+.room-label {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFD700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  z-index: 10;
+  padding: 4px 12px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+/* ── Specific Room Layouts ── */
+.room.engineering {
+  width: 400px;
+  height: 300px;
+}
+
+.room.research {
+  width: 350px;
+  height: 280px;
+}
+
+.room.operations {
+  width: 380px;
+  height: 290px;
+}
+
+.room.meeting {
+  width: 320px;
+  height: 250px;
+}
+
+.room.lounge {
+  width: 360px;
+  height: 270px;
+}
+
+/* ── Furniture Elements ── */
+.furniture {
+  position: absolute;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.furniture.desk {
+  width: 60px;
+  height: 40px;
+  background: #2d3548;
+  border: 2px solid #3a4052;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.furniture.chair {
+  width: 30px;
+  height: 30px;
+  background: #3a4052;
+  border: 2px solid #4a5062;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.furniture.table {
+  width: 80px;
+  height: 80px;
+  background: #2d3548;
+  border: 2px solid #3a4052;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.furniture.sofa {
+  width: 100px;
+  height: 50px;
+  background: #3a4052;
+  border: 2px solid #4a5062;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Agent Sprites ── */
+.agent {
   position: absolute;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  z-index: 50;
+  cursor: pointer;
+  transition: all 0.5s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-white);
-  cursor: pointer;
-  transition: all var(--transition-normal);
-  z-index: 10;
-  box-shadow: 
-    0 3px 12px rgba(0, 0, 0, 0.2),
-    0 1px 4px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  animation: gentle-float 3s ease-in-out infinite;
-  /* Enhanced sprite styling */
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(2px);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  letter-spacing: 0.5px;
-  /* Sprite image support */
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  position: absolute;
-  overflow: hidden;
+  font-size: 28px;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
 }
 
-/* Sprite image overlays for different agent roles */
-.workspace-agent.coordinator::before {
+.agent:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 4px 16px rgba(255, 215, 0, 0.6));
+}
+
+/* Agent glow effect based on status */
+.agent::before {
   content: '';
   position: absolute;
-  inset: 0;
-  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiMzQjgyRjYiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI2IiB5PSI2Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiB4PSI0IiB5PSI0Ij4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KPHN2ZyB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KPHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KPHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KPC9zdmc+') center/80% no-repeat;
-  border-radius: 50%;
-  z-index: 1;
-}
-
-.workspace-agent.developer::before {
-  content: '💻';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-
-.workspace-agent.devops::before {
-  content: '⚙️';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-
-.workspace-agent.researcher::before {
-  content: '🔬';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-
-.workspace-agent.analyst::before {
-  content: '📊';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-
-.workspace-agent.security::before {
-  content: '🛡️';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-
-/* Hide text when sprite is shown */
-.workspace-agent.coordinator,
-.workspace-agent.developer,
-.workspace-agent.devops,
-.workspace-agent.researcher,
-.workspace-agent.analyst,
-.workspace-agent.security {
-  color: transparent;
-  text-indent: -9999px;
-}
-
-/* Agent positioning - render directly in workspace-map, NOT inside room divs */
-/* Agents are now positioned dynamically via JavaScript */
-
-/* Agent name labels */
-.workspace-agent::after {
-  content: attr(data-name);
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: var(--text-white);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  margin-top: 4px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  backdrop-filter: blur(4px);
-}
-
-@keyframes gentle-float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-2px); }
-}
-
-.workspace-agent:hover {
-  /* No scaling -- it shifted layout on mobile and broke navbar hit areas.
-     Use elevation + glow only. */
-  z-index: 11;
-  animation: none;
-  box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.3),
-    0 4px 12px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  border-width: 3px;
-}
-
-.workspace-agent:hover::after {
-  opacity: 1;
-}
-
-.workspace-agent.selected {
-  /* No scaling -- selection is conveyed through ring + shadow only. */
-  z-index: 12;
-  animation: none;
-  box-shadow: 
-    0 12px 32px rgba(0, 0, 0, 0.4),
-    0 0 24px rgba(var(--color-primary-rgb), 0.6),
-    inset 0 2px 0 rgba(255, 255, 255, 0.3);
-  border-width: 3px;
-  border-color: var(--color-primary);
-}
-
-.workspace-agent.selected::after {
-  opacity: 1;
-}
-
-/* Agent Role Colors - Gradient Styling */
-.workspace-agent.coordinator {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  border: 3px solid var(--color-primary-light);
-}
-
-.workspace-agent.developer {
-  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
-  border: 3px solid #34d399;
-}
-
-.workspace-agent.devops {
-  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
-  border: 3px solid #fbbf24;
-}
-
-.workspace-agent.researcher {
-  background: linear-gradient(135deg, var(--color-purple) 0%, #7c3aed 100%);
-  border: 3px solid #a78bfa;
-}
-
-.workspace-agent.analyst {
-  background: linear-gradient(135deg, var(--color-pink) 0%, #be185d 100%);
-  border: 3px solid #f472b6;
-}
-
-.workspace-agent.security {
-  background: linear-gradient(135deg, var(--color-red) 0%, #dc2626 100%);
-  border: 3px solid #f87171;
-}
-
-/* Agent Status Indicators */
-.workspace-agent::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 3px solid var(--bg-primary);
-  z-index: 1;
-}
-
-.workspace-agent.status-online::before {
-  background: var(--color-success);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-}
-
-.workspace-agent.status-busy::before {
-  background: var(--color-warning);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-  animation: pulse-warning 1.5s ease-in-out infinite;
-}
-
-.workspace-agent.status-idle::before {
-  background: var(--color-gray-400);
-}
-
-@keyframes pulse-warning {
-  0%, 100% { 
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-  }
-  50% { 
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
-  }
-}
-
-/* Movement Animation for Zone Changes */
-.workspace-agent.moving {
-  transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 15;
-}
-
-/* ===== WORKSPACE CONTROLS ===== */
-.workspace-controls {
-  position: absolute;
-  top: var(--space-6);
-  right: var(--space-6);
-  display: flex;
-  gap: var(--space-2);
-  z-index: 30;
-  background: rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(8px);
-  border-radius: var(--radius-lg);
-  padding: var(--space-2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.workspace-btn {
-  width: 44px;
-  height: 44px;
-  border: 2px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.workspace-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  transform: translateY(-1px);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.15),
-    0 0 16px rgba(var(--color-primary-rgb), 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.workspace-btn:active {
-  transform: translateY(0);
-  box-shadow: 
-    0 2px 6px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-/* ===== AGENT INFO PANEL ===== */
-.agent-info-panel {
-  position: absolute;
-  bottom: var(--space-6);
-  right: var(--space-6);
-  width: 360px;
-  background: var(--bg-primary);
-  border: 2px solid var(--border-medium);
-  border-radius: var(--radius-xl);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.15),
-    0 8px 16px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  z-index: 40;
-  backdrop-filter: blur(12px);
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.agent-info-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-}
-
-.agent-info-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-white);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.agent-info-details {
-  flex: 1;
-}
-
-.agent-info-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: var(--space-1);
-}
-
-.agent-info-role {
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  font-weight: 600;
-  letter-spacing: 1px;
-  margin-bottom: var(--space-2);
-}
-
-.agent-info-status {
-  display: inline-block;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-md);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.agent-info-status.online {
-  background: rgba(16, 185, 129, 0.2);
-  color: var(--color-success);
-  box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.3);
-}
-
-.agent-info-status.busy {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--color-warning);
-  box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.3);
-}
-
-.agent-info-status.idle {
-  background: rgba(156, 163, 175, 0.2);
-  color: var(--color-gray-400);
-  box-shadow: inset 0 1px 0 rgba(156, 163, 175, 0.3);
-}
-
-.agent-info-close {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(4px);
-}
-
-.agent-info-close:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--text-primary);
-}
-
-.agent-info-content {
-  padding: var(--space-5);
-}
-
-.agent-info-task {
-  font-size: 14px;
-  color: var(--text-primary);
-  margin-bottom: var(--space-5);
-  line-height: 1.5;
-  padding: var(--space-3);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-primary);
-}
-
-.agent-info-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-}
-
-.metric {
-  text-align: center;
-  padding: var(--space-3);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.metric-label {
-  display: block;
-  font-size: 10px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  font-weight: 600;
-  letter-spacing: 1px;
-  margin-bottom: var(--space-2);
-}
-
-.metric-value {
-  display: block;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-/* ===== MOBILE RESPONSIVE DESIGN ===== */
-@media (max-width: 1024px) {
-  .workspace-map {
-    min-height: 600px;
-    padding: var(--space-6);
-  }
-
-  /* Scale down room sizes for tablets */
-  .workspace-zone.engineering,
-  .workspace-zone.research,
-  .workspace-zone.operations,
-  .workspace-zone.meeting {
-    width: 280px;
-    height: 200px;
-  }
-
-  .workspace-zone.lounge {
-    width: 350px;
-    height: 90px;
-  }
-
-  .workspace-agent {
-    width: 30px;
-    height: 30px;
-    font-size: 11px;
-  }
-
-  .agent-info-panel {
-    width: 320px;
-    bottom: var(--space-4);
-    right: var(--space-4);
-  }
-}
-
-/* ===== CRITICAL MOBILE FIX ===== */
-@media (max-width: 767px) {
-  /* Hide sidebar on mobile to prevent overlap */
-  .sidebar {
-    display: none;
-  }
-
-  /* Ensure main content uses full width: shrink the rail to 0 so the
-     office panel can become a true full-screen canvas. */
-  .layout {
-    grid-template-columns: 0 1fr;
-  }
-  .rail { display: none !important; }
-
-  /* The office panel is the dashboard's "workspace map". On mobile it
-     becomes a fixed full-screen canvas under the navbar (60px). */
-  #panelOffice .workspace-2d-container,
-  #panelOffice #workspaceMap {
-    background: #0b0f1a;
-  }
-  #panelOffice .workspace-2d-container {
-    min-height: calc(100vh - 60px);
-    overflow: hidden;
-  }
-
-  #panelOffice #workspaceMap,
-  .workspace-map {
-    /* Reset any earlier zoom/scale and let the absolute room layout fill
-       the viewport. NO transform:scale and NO fixed pixel widths -
-       percentages do all the work. */
-    transform: none !important;
-    transform-origin: top left;
-    padding: 0;
-    margin: 0;
-    width: 100%;
-    height: calc(100vh - 60px);
-    min-height: calc(100vh - 60px);
-    min-width: 0;
-    overflow: hidden;
-    background: #0b0f1a;
-  }
-
-  /* Floor-plan: 4 corners + centred lounge. Percentages only. */
-  .workspace-zone.engineering {
-    top: 5%;  left: 5%;  right: auto;
-    width: 40%; height: 40%;
-    border: 3px solid #2a2f45;
-  }
-  .workspace-zone.research {
-    top: 5%;  right: 5%; left: auto;
-    width: 40%; height: 40%;
-    border: 3px solid #2a2f45;
-  }
-  .workspace-zone.operations {
-    bottom: 5%; left: 5%;
-    width: 40%; height: 40%;
-    border: 3px solid #2a2f45;
-  }
-  .workspace-zone.meeting {
-    bottom: 5%; right: 5%; left: auto;
-    width: 40%; height: 40%;
-    border: 3px solid #2a2f45;
-  }
-  .workspace-zone.lounge {
-    top: 40%;  left: 40%; right: auto; bottom: auto;
-    width: 20%; height: 20%;
-    transform: none;
-    border: 3px solid #2a2f45;
-  }
-
-  /* Reset percentage-based agent positions that the older fixed-px rules
-     were forcing. The JS positions sprites; CSS just sizes them. */
-  .workspace-agent[data-zone="engineering"],
-  .workspace-agent[data-zone="research"],
-  .workspace-agent[data-zone="operations"],
-  .workspace-agent[data-zone="meeting"],
-  .workspace-agent[data-zone="lounge"] {
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: none !important;
-  }
-
-  /* Mobile workspace controls */
-  .workspace-controls {
-    position: fixed;
-    bottom: var(--space-4);
-    right: var(--space-4);
-    top: auto;
-    flex-direction: column;
-    gap: var(--space-2);
-    z-index: 50;
-  }
-
-  .workspace-btn {
-    width: 40px;
-    height: 40px;
-    touch-action: manipulation;
-  }
-
-  /* Mobile agent info panel */
-  .agent-info-panel {
-    position: fixed;
-    width: calc(100% - var(--space-6));
-    bottom: var(--space-3);
-    left: var(--space-3);
-    right: var(--space-3);
-    max-width: none;
-    z-index: 45;
-  }
-
-  .agent-info-metrics {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-  }
-
-  /* Sprite-based agents: replace the round gradient badge with a
-     transparent square that takes a real PNG sprite. */
-  .workspace-agent {
-    width: 28px;
-    height: 28px;
-    background: transparent !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    border: none !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    color: transparent;
-    text-indent: -9999px;
-    animation: none !important;
-    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
-  }
-
-  .workspace-agent::before { display: none !important; content: none !important; }
-
-  .workspace-agent[data-role="developer"]   { background-image: url('assets/agents/dev.png') !important; }
-  .workspace-agent[data-role="researcher"]  { background-image: url('assets/agents/research.png') !important; }
-  .workspace-agent[data-role="analyst"]     { background-image: url('assets/agents/research.png') !important; }
-  .workspace-agent[data-role="devops"]      { background-image: url('assets/agents/ops.png') !important; }
-  .workspace-agent[data-role="security"]    { background-image: url('assets/agents/ops.png') !important; }
-  .workspace-agent[data-role="coordinator"] { background-image: url('assets/agents/manager.png') !important; }
-
-  /* Simplified furniture on mobile */
-  .zone-furniture > * {
-    opacity: 0.3;
-  }
-
-  /* Prevent zone hover transforms on mobile. */
-  .workspace-zone:hover {
-    transform: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .workspace-map {
-    padding: 0;
-    min-height: calc(100vh - 60px);
-  }
-
-  .zone-header {
-    padding: var(--space-3);
-  }
-
-  .zone-header h3 {
-    font-size: 14px;
-  }
-
-  .workspace-agent {
-    width: 26px;
-    height: 26px;
-    /* Keep min-* to ensure tappable target with the surrounding hit-area
-       padding on the agent info container, not the visual sprite. */
-  }
-
-  .agent-info-header {
-    padding: var(--space-4);
-  }
-
-  .agent-info-avatar {
-    width: 48px;
-    height: 48px;
-    font-size: 16px;
-  }
-
-  .agent-info-name {
-    font-size: 16px;
-  }
-
-  .agent-info-content {
-    padding: var(--space-4);
-  }
-
-  /* Hide some furniture elements on very small screens */
-  .workstation:nth-child(2),
-  .coffee-table,
-  .monitoring-desk {
-    display: none;
-  }
-
-  /* Floor plan at 480px is the same percentage layout. No fixed-pixel
-     overrides here so rooms keep their proportions. */
-}
-
-/* ===== ACCESSIBILITY ENHANCEMENTS ===== */
-.workspace-agent:focus {
-  outline: 3px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.workspace-btn:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.agent-info-close:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-  .workspace-agent {
-    animation: none;
-  }
-
-  .zone-status.active {
-    animation: none;
-  }
-
-  .workspace-agent.status-busy::before {
-    animation: none;
-  }
-
-  .workspace-agent.moving {
-    transition: transform 0.3s ease;
-  }
-
-  .agent-info-panel {
-    animation: none;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .workspace-zone {
-    border-width: 4px;
-  }
-
-  .workspace-agent {
-    border-width: 4px;
-  }
-
-  .zone-status {
-    border: 2px solid var(--text-primary);
-  }
-}
-
-/* ===== ENHANCED INTERACTIVE EFFECTS ===== */
-.workspace-zone:active {
-  transform: translateY(-2px);
-}
-
-.workspace-agent:active {
-  /* No scaling -- keep agent footprint stable to avoid layout shifts. */
-  filter: brightness(1.1);
-}
-
-/* Glow effect for zone interactions */
-.workspace-zone.zone-highlight {
-  animation: zone-glow 1s ease-out;
-}
-
-@keyframes zone-glow {
-  0% {
-    box-shadow: 
-      0 4px 16px rgba(0, 0, 0, 0.1),
-      0 0 20px rgba(var(--color-primary-rgb), 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
-  50% {
-    box-shadow: 
-      0 8px 24px rgba(0, 0, 0, 0.2),
-      0 0 40px rgba(var(--color-primary-rgb), 0.4),
-      inset 0 2px 0 rgba(255, 255, 255, 0.1);
-  }
-  100% {
-    box-shadow: 
-      0 4px 16px rgba(0, 0, 0, 0.1),
-      0 0 20px rgba(var(--color-primary-rgb), 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
-}
-
-/* Agent trail effect for movement */
-.workspace-agent.agent-trail::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--color-primary-rgb), 0.3) 0%, transparent 70%);
-  transform: translate(-50%, -50%);
-  animation: trail-fade 0.8s ease-out forwards;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, transparent 70%);
   z-index: -1;
+  animation: pulse 2s ease-in-out infinite;
 }
 
-@keyframes trail-fade {
-  from {
+.agent.status-idle::before {
+  background: radial-gradient(circle, rgba(128, 128, 128, 0.3) 0%, transparent 70%);
+}
+
+.agent.status-working::before {
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.5) 0%, transparent 70%);
+  animation: pulse-fast 1s ease-in-out infinite;
+}
+
+.agent.status-busy::before {
+  background: radial-gradient(circle, rgba(255, 68, 68, 0.5) 0%, transparent 70%);
+  animation: pulse-fast 0.8s ease-in-out infinite;
+}
+
+.agent.status-offline::before {
+  background: none;
+  animation: none;
+}
+
+/* ── Agent Tooltip ── */
+.agent-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: rgba(13, 13, 26, 0.95);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 6px;
+  color: #FFD700;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 100;
+}
+
+.agent:hover .agent-tooltip {
+  opacity: 1;
+}
+
+/* ── Agent Status Badge ── */
+.agent-status-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #0b0f1a;
+  z-index: 51;
+}
+
+.agent.status-idle .agent-status-badge {
+  background: #808080;
+}
+
+.agent.status-working .agent-status-badge {
+  background: #FFD700;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+.agent.status-busy .agent-status-badge {
+  background: #FF4444;
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+}
+
+.agent.status-offline .agent-status-badge {
+  background: #333;
+}
+
+/* ── Animations ── */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+@keyframes pulse-fast {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.15);
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
   }
   to {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.5);
+    transform: rotate(360deg);
   }
 }
 
-/* ===== MISSING COLOR VARIABLES ===== */
-:root {
-  --color-brown-700: #8b4513;
-  --color-brown-600: #a0522d;
-  --color-brown-500: #cd853f;
-  --color-indigo-700: #4338ca;
-  --color-indigo-600: #4f46e5;
-  --color-blue-700: #1d4ed8;
-  --color-blue-600: #2563eb;
-  --color-gray-800: #1f2937;
-  --color-gray-700: #374151;
-  --color-gray-600: #4b5563;
-  --color-gray-500: #6b7280;
+/* ── Open Workspace Button ── */
+.open-workspace-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.08) 100%);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  color: #FFD700;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.open-workspace-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.25) 0%, rgba(255, 215, 0, 0.15) 100%);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.open-workspace-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+  .workspace-topbar {
+    height: 56px;
+    padding: 0 16px;
+  }
+
+  .workspace-topbar-title {
+    font-size: 16px;
+  }
+
+  .workspace-close-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .office-layout {
+    min-width: 100%;
+    min-height: 100%;
+    padding: 30px 20px;
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: auto;
+    align-content: flex-start;
+  }
+
+  .room {
+    width: 100% !important;
+    max-width: 350px;
+    height: auto !important;
+    min-height: 200px;
+  }
+
+  .agent {
+    width: 28px;
+    height: 28px;
+    font-size: 24px;
+  }
+
+  #workspace-map {
+    background-size: 30px 30px;
+  }
+}
+
+/* ── Zoom Controls (Optional) ── */
+.workspace-zoom-controls {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 202;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-zoom-btn {
+  width: 44px;
+  height: 44px;
+  background: rgba(13, 13, 26, 0.9);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  color: #FFD700;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.workspace-zoom-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+/* ── Legend ── */
+.workspace-legend {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  z-index: 202;
+  background: rgba(13, 13, 26, 0.9);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  color: #FFF8DC;
+  font-size: 12px;
+}
+
+.workspace-legend-title {
+  font-weight: 700;
+  color: #FFD700;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.workspace-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.workspace-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.workspace-legend-dot.idle {
+  background: #808080;
+}
+
+.workspace-legend-dot.working {
+  background: #FFD700;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+.workspace-legend-dot.busy {
+  background: #FF4444;
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+}
+
+.workspace-legend-dot.offline {
+  background: #333;
+}
+
+@media (max-width: 768px) {
+  .workspace-legend,
+  .workspace-zoom-controls {
+    display: none;
+  }
 }
