@@ -1,583 +1,631 @@
 /**
- * Hermes 2D Workspace - PixiJS Tile-Based Implementation
+ * Hermes 2D Office Simulation - PixiJS Tile-Based Renderer
  *
- * A complete 2D office workspace rendered with real sprite assets:
- * - Floor tiles (floor.png) filling the entire grid
- * - Wall sprites (wall.png) forming room boundaries
- * - Furniture sprites (desk.png, chair.png, table.png, sofa.png)
- * - Agent character sprites (agent.png) with smooth movement
- * - Layered rendering: floor → room tint → walls → furniture → agents → labels
- * - Responsive fullscreen canvas with camera centering
+ * A complete RimWorld-style 2D office simulation:
+ * - 32x32 pixel floor tiles filling entire canvas
+ * - Wall block sprites forming room boundaries
+ * - Pixel-art furniture sprites (desk, chair, table, sofa)
+ * - Animated agent character sprites with movement AI
+ * - Proper layer ordering: floor → walls → furniture → agents
+ * - Fullscreen responsive canvas, mobile-ready
  *
- * Style: RimWorld / Dwarf Fortress inspired top-down 2D office
+ * All sprites are generated programmatically as pixel-art.
+ * No external image dependencies required.
  */
 
 (function () {
     'use strict';
 
-    // ─── CONFIGURATION ───────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONFIGURATION
+    // ═══════════════════════════════════════════════════════════════════════
 
-    const TILE_SIZE = 32;
-    const GRID_COLS = 40;
-    const GRID_ROWS = 30;
-    const WORLD_WIDTH = GRID_COLS * TILE_SIZE;
-    const WORLD_HEIGHT = GRID_ROWS * TILE_SIZE;
-    const ASSETS_PATH = 'assets/';
+    const TILE = 32;
+    const COLS = 40;
+    const ROWS = 28;
+    const WORLD_W = COLS * TILE;
+    const WORLD_H = ROWS * TILE;
 
-    // ─── ROOM DEFINITIONS ────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // ROOM LAYOUT (tile coordinates)
+    // ═══════════════════════════════════════════════════════════════════════
 
-    const ROOMS = {
-        engineering: {
-            name: 'Engineering',
-            x: 1, y: 1,
-            width: 14, height: 12,
-            tint: 0x1a2235
-        },
-        research: {
-            name: 'Research',
-            x: 16, y: 1,
-            width: 12, height: 12,
-            tint: 0x1a1f35
-        },
-        operations: {
-            name: 'Operations',
-            x: 29, y: 1,
-            width: 10, height: 12,
-            tint: 0x1f2a1a
-        },
-        meeting: {
-            name: 'Meeting Room',
-            x: 1, y: 14,
-            width: 10, height: 10,
-            tint: 0x2a1a2a
-        },
-        lounge: {
-            name: 'Lounge',
-            x: 12, y: 14,
-            width: 16, height: 10,
-            tint: 0x1a2a2a
-        },
-        corridor: {
-            name: 'Hallway',
-            x: 29, y: 14,
-            width: 10, height: 10,
-            tint: 0x1a1a22
-        }
-    };
+    const ROOMS = [
+        { id: 'engineering', name: 'Engineering', x: 1, y: 1, w: 13, h: 11, color: 0x1c2840 },
+        { id: 'research',    name: 'Research',    x: 15, y: 1, w: 11, h: 11, color: 0x1c1f3d },
+        { id: 'operations',  name: 'Operations',  x: 27, y: 1, w: 12, h: 11, color: 0x1f301c },
+        { id: 'meeting',     name: 'Meeting',     x: 1, y: 13, w: 10, h: 10, color: 0x301c30 },
+        { id: 'lounge',      name: 'Lounge',      x: 12, y: 13, w: 14, h: 10, color: 0x1c302e },
+        { id: 'server',      name: 'Server Room', x: 27, y: 13, w: 12, h: 10, color: 0x1a1a28 },
+    ];
 
-    // ─── FURNITURE DEFINITIONS ───────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // FURNITURE PLACEMENT (tile coordinates)
+    // ═══════════════════════════════════════════════════════════════════════
 
     const FURNITURE = [
-        // Engineering room - desks and chairs (6 workstations)
-        { type: 'desk', x: 3, y: 3 },
-        { type: 'chair', x: 3, y: 5 },
-        { type: 'desk', x: 6, y: 3 },
-        { type: 'chair', x: 6, y: 5 },
-        { type: 'desk', x: 9, y: 3 },
-        { type: 'chair', x: 9, y: 5 },
-        { type: 'desk', x: 3, y: 8 },
-        { type: 'chair', x: 3, y: 10 },
-        { type: 'desk', x: 6, y: 8 },
-        { type: 'chair', x: 6, y: 10 },
-        { type: 'desk', x: 9, y: 8 },
-        { type: 'chair', x: 9, y: 10 },
-        { type: 'desk', x: 12, y: 5 },
-        { type: 'chair', x: 12, y: 7 },
+        // Engineering - workstations
+        { type: 'desk', x: 3, y: 3 }, { type: 'chair', x: 3, y: 4 },
+        { type: 'desk', x: 5, y: 3 }, { type: 'chair', x: 5, y: 4 },
+        { type: 'desk', x: 7, y: 3 }, { type: 'chair', x: 7, y: 4 },
+        { type: 'desk', x: 9, y: 3 }, { type: 'chair', x: 9, y: 4 },
+        { type: 'desk', x: 11, y: 3 }, { type: 'chair', x: 11, y: 4 },
+        { type: 'desk', x: 3, y: 7 }, { type: 'chair', x: 3, y: 8 },
+        { type: 'desk', x: 5, y: 7 }, { type: 'chair', x: 5, y: 8 },
+        { type: 'desk', x: 7, y: 7 }, { type: 'chair', x: 7, y: 8 },
+        { type: 'desk', x: 9, y: 7 }, { type: 'chair', x: 9, y: 8 },
+        { type: 'desk', x: 11, y: 7 }, { type: 'chair', x: 11, y: 8 },
 
-        // Research room - desks and tables
-        { type: 'desk', x: 18, y: 3 },
-        { type: 'chair', x: 18, y: 5 },
-        { type: 'desk', x: 21, y: 3 },
-        { type: 'chair', x: 21, y: 5 },
-        { type: 'desk', x: 24, y: 3 },
-        { type: 'chair', x: 24, y: 5 },
-        { type: 'table', x: 19, y: 8 },
-        { type: 'chair', x: 18, y: 9 },
-        { type: 'chair', x: 21, y: 9 },
-        { type: 'desk', x: 24, y: 8 },
-        { type: 'chair', x: 24, y: 10 },
+        // Research - tables and desks
+        { type: 'table', x: 17, y: 3 }, { type: 'table', x: 19, y: 3 },
+        { type: 'chair', x: 17, y: 4 }, { type: 'chair', x: 19, y: 4 },
+        { type: 'desk', x: 17, y: 7 }, { type: 'chair', x: 17, y: 8 },
+        { type: 'desk', x: 19, y: 7 }, { type: 'chair', x: 19, y: 8 },
+        { type: 'desk', x: 21, y: 7 }, { type: 'chair', x: 21, y: 8 },
+        { type: 'table', x: 23, y: 5 },
 
-        // Operations room
-        { type: 'desk', x: 31, y: 3 },
-        { type: 'chair', x: 31, y: 5 },
-        { type: 'desk', x: 34, y: 3 },
-        { type: 'chair', x: 34, y: 5 },
-        { type: 'desk', x: 31, y: 8 },
-        { type: 'chair', x: 31, y: 10 },
-        { type: 'desk', x: 34, y: 8 },
-        { type: 'chair', x: 34, y: 10 },
+        // Operations - server racks and desks
+        { type: 'desk', x: 29, y: 3 }, { type: 'chair', x: 29, y: 4 },
+        { type: 'desk', x: 31, y: 3 }, { type: 'chair', x: 31, y: 4 },
+        { type: 'desk', x: 33, y: 3 }, { type: 'chair', x: 33, y: 4 },
+        { type: 'desk', x: 35, y: 3 }, { type: 'chair', x: 35, y: 4 },
+        { type: 'desk', x: 29, y: 7 }, { type: 'desk', x: 31, y: 7 },
+        { type: 'desk', x: 33, y: 7 }, { type: 'desk', x: 35, y: 7 },
 
-        // Meeting room - large table with chairs
-        { type: 'table', x: 4, y: 17 },
-        { type: 'table', x: 6, y: 17 },
-        { type: 'chair', x: 3, y: 16 },
-        { type: 'chair', x: 5, y: 16 },
-        { type: 'chair', x: 7, y: 16 },
-        { type: 'chair', x: 3, y: 19 },
-        { type: 'chair', x: 5, y: 19 },
-        { type: 'chair', x: 7, y: 19 },
-        { type: 'chair', x: 9, y: 17 },
+        // Meeting - conference table
+        { type: 'table', x: 4, y: 16 }, { type: 'table', x: 5, y: 16 },
+        { type: 'table', x: 6, y: 16 }, { type: 'table', x: 7, y: 16 },
+        { type: 'chair', x: 4, y: 15 }, { type: 'chair', x: 5, y: 15 },
+        { type: 'chair', x: 6, y: 15 }, { type: 'chair', x: 7, y: 15 },
+        { type: 'chair', x: 4, y: 17 }, { type: 'chair', x: 5, y: 17 },
+        { type: 'chair', x: 6, y: 17 }, { type: 'chair', x: 7, y: 17 },
 
         // Lounge - sofas and coffee tables
-        { type: 'sofa', x: 14, y: 16 },
-        { type: 'sofa', x: 14, y: 20 },
-        { type: 'table', x: 14, y: 18 },
-        { type: 'sofa', x: 19, y: 16 },
-        { type: 'sofa', x: 19, y: 20 },
-        { type: 'table', x: 19, y: 18 },
-        { type: 'sofa', x: 24, y: 17 },
-        { type: 'table', x: 24, y: 19 },
-        { type: 'chair', x: 25, y: 21 },
+        { type: 'sofa', x: 14, y: 15 }, { type: 'sofa', x: 14, y: 19 },
+        { type: 'table', x: 14, y: 17 },
+        { type: 'sofa', x: 18, y: 15 }, { type: 'sofa', x: 18, y: 19 },
+        { type: 'table', x: 18, y: 17 },
+        { type: 'sofa', x: 22, y: 15 }, { type: 'table', x: 22, y: 17 },
+        { type: 'chair', x: 22, y: 19 },
 
-        // Corridor / break area
-        { type: 'table', x: 32, y: 17 },
-        { type: 'chair', x: 31, y: 17 },
-        { type: 'chair', x: 34, y: 17 },
-        { type: 'sofa', x: 31, y: 21 },
+        // Server room
+        { type: 'desk', x: 29, y: 15 }, { type: 'desk', x: 31, y: 15 },
+        { type: 'desk', x: 33, y: 15 }, { type: 'desk', x: 35, y: 15 },
+        { type: 'desk', x: 29, y: 19 }, { type: 'desk', x: 31, y: 19 },
+        { type: 'desk', x: 33, y: 19 }, { type: 'desk', x: 35, y: 19 },
+        { type: 'chair', x: 30, y: 17 }, { type: 'chair', x: 34, y: 17 },
     ];
 
-    // ─── AGENT DEFINITIONS ───────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // AGENT DEFINITIONS
+    // ═══════════════════════════════════════════════════════════════════════
 
-    const AGENTS_CONFIG = [
-        { name: 'Alpha', x: 4, y: 4, room: 'engineering', tint: 0x00e5cc },
-        { name: 'Beta', x: 7, y: 4, room: 'engineering', tint: 0x00ccff },
-        { name: 'Gamma', x: 10, y: 9, room: 'engineering', tint: 0x66ffcc },
-        { name: 'Delta', x: 19, y: 4, room: 'research', tint: 0xff9944 },
-        { name: 'Epsilon', x: 22, y: 4, room: 'research', tint: 0xffcc00 },
-        { name: 'Zeta', x: 32, y: 4, room: 'operations', tint: 0x44ff88 },
-        { name: 'Eta', x: 35, y: 9, room: 'operations', tint: 0x88ffaa },
-        { name: 'Theta', x: 5, y: 18, room: 'meeting', tint: 0xff66aa },
-        { name: 'Iota', x: 15, y: 17, room: 'lounge', tint: 0xaa66ff },
-        { name: 'Kappa', x: 20, y: 19, room: 'lounge', tint: 0xff6666 },
-        { name: 'Lambda', x: 33, y: 18, room: 'corridor', tint: 0x66ccff },
-        { name: 'Mu', x: 25, y: 9, room: 'research', tint: 0xccff66 },
+    const AGENT_DEFS = [
+        { name: 'Alpha',   x: 4,  y: 5,  room: 'engineering', color: 0x00e5cc },
+        { name: 'Beta',    x: 6,  y: 5,  room: 'engineering', color: 0x00bbff },
+        { name: 'Gamma',   x: 8,  y: 9,  room: 'engineering', color: 0x55ffaa },
+        { name: 'Delta',   x: 18, y: 5,  room: 'research',    color: 0xff9944 },
+        { name: 'Epsilon', x: 20, y: 5,  room: 'research',    color: 0xffcc00 },
+        { name: 'Zeta',    x: 30, y: 5,  room: 'operations',  color: 0x44ff88 },
+        { name: 'Eta',     x: 34, y: 5,  room: 'operations',  color: 0x88ffcc },
+        { name: 'Theta',   x: 5,  y: 18, room: 'meeting',     color: 0xff66aa },
+        { name: 'Iota',    x: 15, y: 17, room: 'lounge',      color: 0xaa66ff },
+        { name: 'Kappa',   x: 19, y: 17, room: 'lounge',      color: 0xff6666 },
+        { name: 'Lambda',  x: 30, y: 17, room: 'server',      color: 0x66ccff },
+        { name: 'Mu',      x: 34, y: 17, room: 'server',      color: 0xccff66 },
     ];
 
-    // ─── PIXI APPLICATION ────────────────────────────────────────────────────────
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PIXI APPLICATION SETUP
+    // ═══════════════════════════════════════════════════════════════════════
 
     const app = new PIXI.Application({
         resizeTo: window,
-        backgroundColor: 0x0b0f1a,
-        antialias: false,  // pixel-art: keep crisp
+        backgroundColor: 0x0a0e17,
+        antialias: false,
         resolution: window.devicePixelRatio || 1,
-        autoDensity: true
+        autoDensity: true,
     });
 
     document.getElementById('workspace-container').appendChild(app.view);
 
-    // ─── LAYER CONTAINERS (z-order) ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // RENDER LAYERS (strict z-order)
+    // Layer 1: Floor tiles (bottom)
+    // Layer 2: Room tint overlays
+    // Layer 3: Walls
+    // Layer 4: Furniture
+    // Layer 5: Agents (top)
+    // Layer 6: Labels (overlay)
+    // ═══════════════════════════════════════════════════════════════════════
 
+    const world = new PIXI.Container();
     const floorLayer = new PIXI.Container();
-    const roomTintLayer = new PIXI.Container();
+    const tintLayer = new PIXI.Container();
     const wallLayer = new PIXI.Container();
     const furnitureLayer = new PIXI.Container();
     const agentLayer = new PIXI.Container();
     const labelLayer = new PIXI.Container();
 
-    // World container for camera/pan
-    const worldContainer = new PIXI.Container();
-    worldContainer.addChild(floorLayer);
-    worldContainer.addChild(roomTintLayer);
-    worldContainer.addChild(wallLayer);
-    worldContainer.addChild(furnitureLayer);
-    worldContainer.addChild(agentLayer);
-    worldContainer.addChild(labelLayer);
+    world.addChild(floorLayer);
+    world.addChild(tintLayer);
+    world.addChild(wallLayer);
+    world.addChild(furnitureLayer);
+    world.addChild(agentLayer);
+    world.addChild(labelLayer);
+    app.stage.addChild(world);
 
-    app.stage.addChild(worldContainer);
-
-    // Center the world in viewport
-    function centerWorld() {
-        const offsetX = (app.screen.width - WORLD_WIDTH) / 2;
-        const offsetY = (app.screen.height - WORLD_HEIGHT) / 2;
-        worldContainer.x = Math.max(0, offsetX);
-        worldContainer.y = Math.max(0, offsetY);
+    // Camera centering
+    function centerCamera() {
+        const sx = app.screen.width / WORLD_W;
+        const sy = app.screen.height / WORLD_H;
+        const scale = Math.min(sx, sy, 1.5);
+        world.scale.set(scale);
+        world.x = (app.screen.width - WORLD_W * scale) / 2;
+        world.y = (app.screen.height - WORLD_H * scale) / 2;
     }
-    centerWorld();
-    window.addEventListener('resize', centerWorld);
+    centerCamera();
+    window.addEventListener('resize', centerCamera);
 
-    // ─── ASSET LOADING ───────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // PIXEL-ART TEXTURE GENERATION
+    // These create detailed pixel-art sprites procedurally
+    // ═══════════════════════════════════════════════════════════════════════
 
-    const assetManifest = [
-        { alias: 'floor', src: ASSETS_PATH + 'floor.png' },
-        { alias: 'wall', src: ASSETS_PATH + 'wall.png' },
-        { alias: 'desk', src: ASSETS_PATH + 'desk.png' },
-        { alias: 'chair', src: ASSETS_PATH + 'chair.png' },
-        { alias: 'table', src: ASSETS_PATH + 'table.png' },
-        { alias: 'sofa', src: ASSETS_PATH + 'sofa.png' },
-        { alias: 'agent', src: ASSETS_PATH + 'agent.png' },
-    ];
+    function generateTextures() {
+        const textures = {};
 
-    // Load all assets then initialize the world
-    PIXI.Assets.load(assetManifest.map(a => ({ alias: a.alias, src: a.src })))
-        .then(textures => {
-            // Set pixel-art scaling mode (no blurring)
-            Object.values(textures).forEach(tex => {
-                if (tex && tex.baseTexture) {
-                    tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-                }
-            });
-            initWorld(textures);
-        })
-        .catch(err => {
-            console.error('[Hermes Workspace] Asset loading failed, using fallback:', err);
-            // Fallback: generate textures programmatically
-            initWorldFallback();
-        });
+        // ── Floor Tile ──────────────────────────────────────────────
+        // Stone-like floor with subtle grid lines and texture variation
+        (function () {
+            const g = new PIXI.Graphics();
+            // Base color
+            g.beginFill(0x3a3f4a);
+            g.drawRect(0, 0, TILE, TILE);
+            g.endFill();
+            // Subtle stone texture - lighter patches
+            g.beginFill(0x3e4450, 0.6);
+            g.drawRect(2, 2, 12, 12);
+            g.endFill();
+            g.beginFill(0x35394a, 0.5);
+            g.drawRect(16, 4, 10, 8);
+            g.endFill();
+            g.beginFill(0x404858, 0.4);
+            g.drawRect(4, 18, 8, 10);
+            g.endFill();
+            g.beginFill(0x3c4250, 0.3);
+            g.drawRect(20, 20, 10, 8);
+            g.endFill();
+            // Grid lines (mortar between tiles)
+            g.beginFill(0x2a2f38, 0.8);
+            g.drawRect(0, 0, TILE, 1);
+            g.drawRect(0, 0, 1, TILE);
+            g.endFill();
+            // Small highlight dots (pebble effect)
+            g.beginFill(0x4a5060, 0.4);
+            g.drawRect(8, 8, 2, 2);
+            g.drawRect(22, 14, 2, 2);
+            g.drawRect(14, 24, 2, 2);
+            g.endFill();
+            textures.floor = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
 
-    // ─── WORLD INITIALIZATION (sprite-based) ─────────────────────────────────────
+        // ── Wall Tile ───────────────────────────────────────────────
+        // Brick-like wall block with depth shading
+        (function () {
+            const g = new PIXI.Graphics();
+            // Outer dark edge (depth shadow)
+            g.beginFill(0x1a1e28);
+            g.drawRect(0, 0, TILE, TILE);
+            g.endFill();
+            // Main brick face
+            g.beginFill(0x4a5568);
+            g.drawRect(2, 2, TILE - 4, TILE - 4);
+            g.endFill();
+            // Inner highlight (top-left light)
+            g.beginFill(0x5a6578);
+            g.drawRect(3, 3, TILE - 8, 2);
+            g.drawRect(3, 3, 2, TILE - 8);
+            g.endFill();
+            // Inner shadow (bottom-right)
+            g.beginFill(0x3a4050);
+            g.drawRect(5, TILE - 5, TILE - 8, 2);
+            g.drawRect(TILE - 5, 5, 2, TILE - 8);
+            g.endFill();
+            // Brick line detail
+            g.beginFill(0x404a5c);
+            g.drawRect(4, 14, TILE - 8, 1);
+            g.endFill();
+            // Mortar dots
+            g.beginFill(0x606a7a, 0.3);
+            g.drawRect(8, 7, 2, 2);
+            g.drawRect(18, 7, 2, 2);
+            g.drawRect(13, 20, 2, 2);
+            g.endFill();
+            textures.wall = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
 
-    function initWorld(tex) {
-        renderFloor(tex.floor);
+        // ── Desk Sprite ─────────────────────────────────────────────
+        // Top-down desk with monitor/keyboard suggestion
+        (function () {
+            const g = new PIXI.Graphics();
+            // Desk surface (wooden brown)
+            g.beginFill(0x6b4c2a);
+            g.drawRect(2, 6, 28, 20);
+            g.endFill();
+            // Desk edge highlight
+            g.beginFill(0x7d5c38);
+            g.drawRect(2, 6, 28, 2);
+            g.endFill();
+            // Desk shadow
+            g.beginFill(0x5a3e1e);
+            g.drawRect(2, 24, 28, 2);
+            g.endFill();
+            // Monitor (dark rectangle)
+            g.beginFill(0x1a2030);
+            g.drawRect(8, 9, 16, 10);
+            g.endFill();
+            // Monitor screen glow
+            g.beginFill(0x2244aa, 0.6);
+            g.drawRect(9, 10, 14, 8);
+            g.endFill();
+            // Keyboard
+            g.beginFill(0x2a2e38);
+            g.drawRect(10, 21, 12, 3);
+            g.endFill();
+            textures.desk = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
+
+        // ── Chair Sprite ────────────────────────────────────────────
+        // Top-down office chair (round seat with back)
+        (function () {
+            const g = new PIXI.Graphics();
+            // Chair base (star shape simplified as circle)
+            g.beginFill(0x2a2a2a, 0.5);
+            g.drawCircle(16, 18, 10);
+            g.endFill();
+            // Seat cushion
+            g.beginFill(0x2952a3);
+            g.drawCircle(16, 16, 8);
+            g.endFill();
+            // Seat highlight
+            g.beginFill(0x3b6bc9, 0.5);
+            g.drawCircle(14, 14, 4);
+            g.endFill();
+            // Chair back (arc at top)
+            g.beginFill(0x1e3d7a);
+            g.drawRect(9, 6, 14, 4);
+            g.endFill();
+            g.beginFill(0x274da6);
+            g.drawRect(10, 7, 12, 2);
+            g.endFill();
+            textures.chair = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
+
+        // ── Table Sprite ────────────────────────────────────────────
+        // Larger table top-down (meeting/work table)
+        (function () {
+            const g = new PIXI.Graphics();
+            // Table surface
+            g.beginFill(0x5c7c5a);
+            g.drawRect(2, 4, 28, 24);
+            g.endFill();
+            // Table edge top highlight
+            g.beginFill(0x6d8d6a);
+            g.drawRect(2, 4, 28, 2);
+            g.endFill();
+            // Table edge shadow
+            g.beginFill(0x4a6448);
+            g.drawRect(2, 26, 28, 2);
+            g.endFill();
+            // Center detail (grain pattern)
+            g.beginFill(0x527252, 0.4);
+            g.drawRect(6, 10, 20, 1);
+            g.drawRect(6, 16, 20, 1);
+            g.drawRect(6, 22, 20, 1);
+            g.endFill();
+            textures.table = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
+
+        // ── Sofa Sprite ─────────────────────────────────────────────
+        // Comfy sofa top-down
+        (function () {
+            const g = new PIXI.Graphics();
+            // Sofa frame
+            g.beginFill(0x7a2e4a);
+            g.drawRoundedRect(2, 4, 28, 24, 4);
+            g.endFill();
+            // Cushion area
+            g.beginFill(0x9e4060);
+            g.drawRoundedRect(5, 8, 22, 16, 3);
+            g.endFill();
+            // Cushion highlights
+            g.beginFill(0xb05070, 0.5);
+            g.drawRoundedRect(6, 9, 9, 14, 2);
+            g.endFill();
+            g.beginFill(0xb05070, 0.5);
+            g.drawRoundedRect(17, 9, 9, 14, 2);
+            g.endFill();
+            // Arm rests
+            g.beginFill(0x6a2440);
+            g.drawRect(2, 6, 3, 20);
+            g.drawRect(27, 6, 3, 20);
+            g.endFill();
+            textures.sofa = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
+
+        // ── Agent Sprite ────────────────────────────────────────────
+        // Top-down character (head + body, like RimWorld pawns)
+        (function () {
+            const g = new PIXI.Graphics();
+            // Shadow
+            g.beginFill(0x000000, 0.25);
+            g.drawEllipse(16, 26, 8, 4);
+            g.endFill();
+            // Body (torso)
+            g.beginFill(0xffffff);
+            g.drawRoundedRect(8, 14, 16, 14, 3);
+            g.endFill();
+            // Body shading
+            g.beginFill(0xdddddd, 0.5);
+            g.drawRect(18, 16, 4, 10);
+            g.endFill();
+            // Head
+            g.beginFill(0xffffff);
+            g.drawCircle(16, 10, 7);
+            g.endFill();
+            // Head highlight
+            g.beginFill(0xffffff, 0.3);
+            g.drawCircle(14, 8, 3);
+            g.endFill();
+            textures.agent = app.renderer.generateTexture(g);
+            g.destroy();
+        })();
+
+        return textures;
+    }
+
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WORLD RENDERING
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function buildWorld(tex) {
+        renderFloorTiles(tex);
         renderRoomTints();
-        renderWalls(tex.wall);
+        renderWallTiles(tex);
+        renderFurnitureSprites(tex);
+        spawnAgents(tex);
         renderRoomLabels();
-        renderFurniture(tex);
-        createAgents(tex.agent);
-        startAnimation();
+        startSimulation();
         updateHUD();
-        console.log('[Hermes Workspace] Tile-based world initialized with sprite assets');
+        console.log('[Hermes Sim] World built: ' + COLS + 'x' + ROWS + ' tiles');
     }
 
-    // ─── FLOOR TILE RENDERING ────────────────────────────────────────────────────
+    // ── Floor: fill entire grid with floor tiles ─────────────────────────
 
-    function renderFloor(floorTex) {
-        for (let row = 0; row < GRID_ROWS; row++) {
-            for (let col = 0; col < GRID_COLS; col++) {
-                const tile = new PIXI.Sprite(floorTex);
-                tile.x = col * TILE_SIZE;
-                tile.y = row * TILE_SIZE;
-                tile.width = TILE_SIZE;
-                tile.height = TILE_SIZE;
-                floorLayer.addChild(tile);
+    function renderFloorTiles(tex) {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const s = new PIXI.Sprite(tex.floor);
+                s.x = c * TILE;
+                s.y = r * TILE;
+                s.width = TILE;
+                s.height = TILE;
+                floorLayer.addChild(s);
             }
         }
     }
 
-    // ─── ROOM TINT OVERLAYS ──────────────────────────────────────────────────────
+    // ── Room tint overlays (colored floor areas) ─────────────────────────
 
     function renderRoomTints() {
-        Object.values(ROOMS).forEach(room => {
-            const tint = new PIXI.Graphics();
-            tint.beginFill(room.tint, 0.45);
-            tint.drawRect(
-                (room.x + 1) * TILE_SIZE,
-                (room.y + 1) * TILE_SIZE,
-                (room.width - 2) * TILE_SIZE,
-                (room.height - 2) * TILE_SIZE
+        ROOMS.forEach(room => {
+            const g = new PIXI.Graphics();
+            g.beginFill(room.color, 0.5);
+            g.drawRect(
+                (room.x + 1) * TILE,
+                (room.y + 1) * TILE,
+                (room.w - 2) * TILE,
+                (room.h - 2) * TILE
             );
-            tint.endFill();
-            roomTintLayer.addChild(tint);
+            g.endFill();
+            tintLayer.addChild(g);
         });
     }
 
-    // ─── WALL RENDERING ──────────────────────────────────────────────────────────
+    // ── Walls: build boundaries around each room using wall sprites ──────
 
-    function renderWalls(wallTex) {
-        // Build a set of wall positions to avoid duplicates
-        const wallPositions = new Set();
+    function renderWallTiles(tex) {
+        const placed = new Set();
 
-        Object.values(ROOMS).forEach(room => {
-            const { x, y, width, height } = room;
+        ROOMS.forEach(room => {
+            const { x, y, w, h } = room;
 
-            // Top wall
-            for (let col = x; col < x + width; col++) {
-                wallPositions.add(`${col},${y}`);
+            // Top and bottom walls
+            for (let c = x; c < x + w; c++) {
+                placeWall(c, y, tex, placed);
+                placeWall(c, y + h - 1, tex, placed);
             }
-            // Bottom wall
-            for (let col = x; col < x + width; col++) {
-                wallPositions.add(`${col},${y + height - 1}`);
+            // Left and right walls
+            for (let r = y; r < y + h; r++) {
+                placeWall(x, r, tex, placed);
+                placeWall(x + w - 1, r, tex, placed);
             }
-            // Left wall
-            for (let row = y; row < y + height; row++) {
-                wallPositions.add(`${x},${row}`);
-            }
-            // Right wall
-            for (let row = y; row < y + height; row++) {
-                wallPositions.add(`${x + width - 1},${row}`);
-            }
-        });
-
-        // Render each wall tile as a sprite
-        wallPositions.forEach(key => {
-            const [col, row] = key.split(',').map(Number);
-            const wall = new PIXI.Sprite(wallTex);
-            wall.x = col * TILE_SIZE;
-            wall.y = row * TILE_SIZE;
-            wall.width = TILE_SIZE;
-            wall.height = TILE_SIZE;
-            wallLayer.addChild(wall);
         });
     }
 
-    // ─── ROOM LABELS ─────────────────────────────────────────────────────────────
+    function placeWall(col, row, tex, placed) {
+        const key = col + ',' + row;
+        if (placed.has(key)) return;
+        placed.add(key);
+
+        const s = new PIXI.Sprite(tex.wall);
+        s.x = col * TILE;
+        s.y = row * TILE;
+        s.width = TILE;
+        s.height = TILE;
+        wallLayer.addChild(s);
+    }
+
+    // ── Furniture: place sprites at grid positions ───────────────────────
+
+    function renderFurnitureSprites(tex) {
+        FURNITURE.forEach(item => {
+            const t = tex[item.type];
+            if (!t) return;
+            const s = new PIXI.Sprite(t);
+            s.x = item.x * TILE;
+            s.y = item.y * TILE;
+            s.width = TILE;
+            s.height = TILE;
+            furnitureLayer.addChild(s);
+        });
+    }
+
+    // ── Room Labels ──────────────────────────────────────────────────────
 
     function renderRoomLabels() {
-        Object.values(ROOMS).forEach(room => {
+        ROOMS.forEach(room => {
             const label = new PIXI.Text(room.name, {
-                fontFamily: '"Press Start 2P", "Courier New", monospace',
-                fontSize: 10,
-                fill: 0x00e5cc,
-                fontWeight: '600',
+                fontFamily: 'Courier New, monospace',
+                fontSize: 9,
+                fill: 0x88ccbb,
                 align: 'center',
                 dropShadow: true,
                 dropShadowColor: 0x000000,
                 dropShadowDistance: 1,
-                dropShadowAlpha: 0.7
+                dropShadowAlpha: 0.9,
             });
+            label.anchor.set(0.5, 0.5);
+            label.x = (room.x + room.w / 2) * TILE;
+            label.y = (room.y + 1.5) * TILE;
             label.alpha = 0.85;
-            label.anchor.set(0.5, 0);
-            label.x = (room.x + room.width / 2) * TILE_SIZE;
-            label.y = (room.y + 1.3) * TILE_SIZE;
             labelLayer.addChild(label);
         });
     }
 
-    // ─── FURNITURE RENDERING ─────────────────────────────────────────────────────
-
-    function renderFurniture(tex) {
-        FURNITURE.forEach(item => {
-            const texture = tex[item.type];
-            if (!texture) return;
-
-            const sprite = new PIXI.Sprite(texture);
-            sprite.x = item.x * TILE_SIZE;
-            sprite.y = item.y * TILE_SIZE;
-            sprite.width = TILE_SIZE;
-            sprite.height = TILE_SIZE;
-            furnitureLayer.addChild(sprite);
-        });
-    }
-
-    // ─── AGENT RENDERING & ANIMATION ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // AGENT SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════
 
     const agents = [];
 
-    function createAgents(agentTex) {
-        AGENTS_CONFIG.forEach(config => {
-            const sprite = new PIXI.Sprite(agentTex);
-            sprite.x = config.x * TILE_SIZE;
-            sprite.y = config.y * TILE_SIZE;
-            sprite.width = TILE_SIZE;
-            sprite.height = TILE_SIZE;
-            sprite.tint = config.tint;
-            sprite.anchor.set(0, 0);
+    function spawnAgents(tex) {
+        AGENT_DEFS.forEach(def => {
+            const sprite = new PIXI.Sprite(tex.agent);
+            sprite.x = def.x * TILE;
+            sprite.y = def.y * TILE;
+            sprite.width = TILE;
+            sprite.height = TILE;
+            sprite.tint = def.color;
+            agentLayer.addChild(sprite);
 
-            // Name label below agent
-            const nameLabel = new PIXI.Text(config.name, {
-                fontFamily: '"Press Start 2P", "Courier New", monospace',
+            // Name tag
+            const tag = new PIXI.Text(def.name, {
+                fontFamily: 'Courier New, monospace',
                 fontSize: 7,
-                fill: config.tint,
+                fill: def.color,
                 align: 'center',
                 dropShadow: true,
                 dropShadowColor: 0x000000,
                 dropShadowDistance: 1,
-                dropShadowAlpha: 0.8
+                dropShadowAlpha: 0.9,
             });
-            nameLabel.anchor.set(0.5, 0);
-            nameLabel.x = sprite.x + TILE_SIZE * 0.5;
-            nameLabel.y = sprite.y - 10;
-            nameLabel.alpha = 0.9;
+            tag.anchor.set(0.5, 1);
+            tag.x = sprite.x + TILE / 2;
+            tag.y = sprite.y - 2;
+            tag.alpha = 0.9;
+            labelLayer.addChild(tag);
 
-            agentLayer.addChild(sprite);
-            labelLayer.addChild(nameLabel);
+            // Find this agent's room bounds
+            const room = ROOMS.find(r => r.id === def.room);
+            const bounds = room ? {
+                minX: (room.x + 2) * TILE,
+                maxX: (room.x + room.w - 3) * TILE,
+                minY: (room.y + 2) * TILE,
+                maxY: (room.y + room.h - 3) * TILE,
+            } : { minX: TILE * 2, maxX: WORLD_W - TILE * 3, minY: TILE * 2, maxY: WORLD_H - TILE * 3 };
 
-            // Movement state
-            const room = ROOMS[config.room];
-            const agent = {
+            agents.push({
                 sprite,
-                nameLabel,
-                config,
-                room,
-                targetX: sprite.x,
-                targetY: sprite.y,
-                speed: 0.4 + Math.random() * 0.5,
-                moveTimer: Math.random() * 200,
-                moveInterval: 120 + Math.random() * 180,
-                bobOffset: Math.random() * Math.PI * 2
-            };
-
-            agents.push(agent);
+                tag,
+                bounds,
+                tx: sprite.x,
+                ty: sprite.y,
+                speed: 0.3 + Math.random() * 0.4,
+                timer: Math.random() * 150,
+                interval: 100 + Math.random() * 200,
+                bobPhase: Math.random() * Math.PI * 2,
+            });
         });
     }
 
-    // Pick a new random target within the agent's room (avoiding walls)
-    function pickNewTarget(agent) {
-        const room = agent.room;
-        const margin = 2; // Stay away from walls
-        const minX = (room.x + margin) * TILE_SIZE;
-        const maxX = (room.x + room.width - margin - 1) * TILE_SIZE;
-        const minY = (room.y + margin) * TILE_SIZE;
-        const maxY = (room.y + room.height - margin - 1) * TILE_SIZE;
+    // ═══════════════════════════════════════════════════════════════════════
+    // SIMULATION LOOP (agent movement + idle animation)
+    // ═══════════════════════════════════════════════════════════════════════
 
-        agent.targetX = minX + Math.random() * (maxX - minX);
-        agent.targetY = minY + Math.random() * (maxY - minY);
-    }
-
-    // ─── ANIMATION LOOP ──────────────────────────────────────────────────────────
-
-    let elapsed = 0;
-
-    function startAnimation() {
+    function startSimulation() {
         app.ticker.add((delta) => {
-            elapsed += delta;
+            agents.forEach(a => {
+                a.timer += delta;
 
-            agents.forEach(agent => {
-                agent.moveTimer += delta;
-
-                // Pick new target periodically
-                if (agent.moveTimer >= agent.moveInterval) {
-                    agent.moveTimer = 0;
-                    agent.moveInterval = 120 + Math.random() * 200;
-                    pickNewTarget(agent);
+                // Pick new random target in room
+                if (a.timer >= a.interval) {
+                    a.timer = 0;
+                    a.interval = 80 + Math.random() * 220;
+                    a.tx = a.bounds.minX + Math.random() * (a.bounds.maxX - a.bounds.minX);
+                    a.ty = a.bounds.minY + Math.random() * (a.bounds.maxY - a.bounds.minY);
                 }
 
-                // Smooth movement towards target
-                const dx = agent.targetX - agent.sprite.x;
-                const dy = agent.targetY - agent.sprite.y;
+                // Move towards target
+                const dx = a.tx - a.sprite.x;
+                const dy = a.ty - a.sprite.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                if (dist > 1) {
-                    agent.sprite.x += (dx / dist) * agent.speed * delta;
-                    agent.sprite.y += (dy / dist) * agent.speed * delta;
+                if (dist > 1.5) {
+                    a.sprite.x += (dx / dist) * a.speed * delta;
+                    a.sprite.y += (dy / dist) * a.speed * delta;
                 }
 
-                // Subtle idle bob animation
-                const bob = Math.sin(elapsed * 0.04 + agent.bobOffset) * 0.8;
-                const visualY = agent.sprite.y + bob * 0.3;
+                // Idle bob
+                a.bobPhase += 0.03 * delta;
+                const bob = Math.sin(a.bobPhase) * 0.6;
 
-                // Update name label position
-                agent.nameLabel.x = agent.sprite.x + TILE_SIZE * 0.5;
-                agent.nameLabel.y = agent.sprite.y - 10 + bob * 0.2;
+                // Update name tag position
+                a.tag.x = a.sprite.x + TILE / 2;
+                a.tag.y = a.sprite.y - 2 + bob;
             });
         });
     }
 
-    // ─── HUD UPDATE ──────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // HUD UPDATE
+    // ═══════════════════════════════════════════════════════════════════════
 
     function updateHUD() {
-        const agentCountEl = document.getElementById('agent-count');
-        const roomLabelEl = document.getElementById('room-label');
-        if (agentCountEl) agentCountEl.textContent = `Agents: ${agents.length}`;
-        if (roomLabelEl) roomLabelEl.textContent = `Rooms: ${Object.keys(ROOMS).length} | Tiles: ${GRID_COLS}x${GRID_ROWS}`;
+        const ac = document.getElementById('agent-count');
+        const rl = document.getElementById('room-label');
+        if (ac) ac.textContent = 'Agents: ' + agents.length + ' active';
+        if (rl) rl.textContent = 'Rooms: ' + ROOMS.length + ' | Grid: ' + COLS + 'x' + ROWS + ' | Tile: ' + TILE + 'px';
     }
 
-    // ─── FALLBACK (programmatic textures if assets fail to load) ──────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // INITIALIZATION
+    // Always use programmatic pixel-art textures (reliable, no network deps)
+    // ═══════════════════════════════════════════════════════════════════════
 
-    function initWorldFallback() {
-        console.warn('[Hermes Workspace] Using programmatic fallback textures');
-
-        const COLORS = {
-            floor: 0x2d323c,
-            floorLine: 0x232832,
-            wall: 0x3c4150,
-            wallHighlight: 0x4a5060,
-            desk: 0x503720,
-            chair: 0x1e325a,
-            sofa: 0x6b2d4a,
-            table: 0x3d5c3a,
-            agent: 0x00e5cc
-        };
-
-        // Generate fallback textures
-        function makeRect(color, w, h) {
-            const g = new PIXI.Graphics();
-            g.beginFill(color);
-            g.drawRect(0, 0, w || TILE_SIZE, h || TILE_SIZE);
-            g.endFill();
-            return app.renderer.generateTexture(g);
-        }
-
-        function makeFloorTex() {
-            const g = new PIXI.Graphics();
-            g.beginFill(COLORS.floor);
-            g.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
-            g.endFill();
-            g.lineStyle(1, COLORS.floorLine, 0.5);
-            g.moveTo(0, 0); g.lineTo(TILE_SIZE, 0);
-            g.moveTo(0, 0); g.lineTo(0, TILE_SIZE);
-            return app.renderer.generateTexture(g);
-        }
-
-        function makeWallTex() {
-            const g = new PIXI.Graphics();
-            g.beginFill(COLORS.wall);
-            g.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
-            g.endFill();
-            g.beginFill(COLORS.wallHighlight);
-            g.drawRect(2, 2, TILE_SIZE - 4, TILE_SIZE - 4);
-            g.endFill();
-            g.beginFill(COLORS.wall);
-            g.drawRect(4, 4, TILE_SIZE - 8, TILE_SIZE - 8);
-            g.endFill();
-            return app.renderer.generateTexture(g);
-        }
-
-        function makeAgentTex(color) {
-            const g = new PIXI.Graphics();
-            g.beginFill(0x000000, 0.3);
-            g.drawEllipse(TILE_SIZE * 0.5, TILE_SIZE * 0.85, TILE_SIZE * 0.3, TILE_SIZE * 0.1);
-            g.endFill();
-            g.beginFill(color, 0.9);
-            g.drawRoundedRect(TILE_SIZE * 0.25, TILE_SIZE * 0.4, TILE_SIZE * 0.5, TILE_SIZE * 0.5, 3);
-            g.endFill();
-            g.beginFill(color);
-            g.drawCircle(TILE_SIZE * 0.5, TILE_SIZE * 0.3, TILE_SIZE * 0.2);
-            g.endFill();
-            return app.renderer.generateTexture(g);
-        }
-
-        const floorTex = makeFloorTex();
-        const wallTex = makeWallTex();
-
-        renderFloor(floorTex);
-        renderRoomTints();
-        renderWalls(wallTex);
-        renderRoomLabels();
-
-        // Furniture with simple colored rects
-        const furnitureTex = {
-            desk: makeRect(COLORS.desk),
-            chair: makeRect(COLORS.chair),
-            table: makeRect(COLORS.table),
-            sofa: makeRect(COLORS.sofa)
-        };
-        renderFurniture(furnitureTex);
-
-        // Agents with programmatic sprites
-        AGENTS_CONFIG.forEach(config => {
-            const texture = makeAgentTex(config.tint);
-            const sprite = new PIXI.Sprite(texture);
-            sprite.x = config.x * TILE_SIZE;
-            sprite.y = config.y * TILE_SIZE;
-            sprite.anchor.set(0, 0);
-
-            const nameLabel = new PIXI.Text(config.name, {
-                fontFamily: 'monospace',
-                fontSize: 8,
-                fill: config.tint,
-                align: 'center'
-            });
-            nameLabel.anchor.set(0.5, 0);
-            nameLabel.x = sprite.x + TILE_SIZE * 0.5;
-            nameLabel.y = sprite.y - 10;
-            nameLabel.alpha = 0.8;
-
-            agentLayer.addChild(sprite);
-            labelLayer.addChild(nameLabel);
-
-            const room = ROOMS[config.room];
-            agents.push({
-                sprite, nameLabel, config, room,
-                targetX: sprite.x, targetY: sprite.y,
-                speed: 0.4 + Math.random() * 0.5,
-                moveTimer: Math.random() * 200,
-                moveInterval: 120 + Math.random() * 180,
-                bobOffset: Math.random() * Math.PI * 2
-            });
-        });
-
-        startAnimation();
-        updateHUD();
-    }
+    const textures = generateTextures();
+    buildWorld(textures);
+    console.log('[Hermes Sim] Tile-based 2D office simulation ready');
 
 })();

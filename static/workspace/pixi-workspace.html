@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hermes 2D Workspace</title>
+    <title>Hermes 2D Office Simulation</title>
     <style>
         * {
             margin: 0;
@@ -15,97 +15,98 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #0b0f1a;
+            background-color: #0a0e17;
             font-family: 'Courier New', monospace;
+            touch-action: none;
         }
 
         #workspace-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
 
         #workspace-container canvas {
             display: block;
-            width: 100%;
-            height: 100%;
+            width: 100% !important;
+            height: 100% !important;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
 
         #workspace-hud {
-            position: absolute;
-            top: 12px;
-            left: 12px;
+            position: fixed;
+            top: 8px;
+            left: 8px;
             color: #00e5cc;
-            font-size: 13px;
+            font-size: 11px;
             pointer-events: none;
-            z-index: 10;
-            text-shadow: 0 0 6px rgba(0, 229, 204, 0.5);
-            background: rgba(11, 15, 26, 0.8);
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid rgba(0, 229, 204, 0.2);
+            z-index: 100;
+            text-shadow: 0 0 4px rgba(0, 229, 204, 0.6);
+            background: rgba(10, 14, 23, 0.92);
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 229, 204, 0.3);
         }
 
         #workspace-hud h1 {
-            font-size: 14px;
+            font-size: 11px;
             font-weight: 700;
             margin-bottom: 2px;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
         }
 
         #workspace-hud p {
-            opacity: 0.7;
-            font-size: 10px;
+            opacity: 0.65;
+            font-size: 9px;
         }
 
         #room-label {
-            position: absolute;
-            bottom: 12px;
-            left: 12px;
-            color: #ffffff;
-            font-size: 11px;
-            background: rgba(11, 15, 26, 0.85);
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(0, 229, 204, 0.3);
+            position: fixed;
+            bottom: 8px;
+            left: 8px;
+            color: #aabbcc;
+            font-size: 10px;
+            background: rgba(10, 14, 23, 0.9);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 229, 204, 0.2);
             pointer-events: none;
-            z-index: 10;
+            z-index: 100;
         }
 
         #agent-count {
-            position: absolute;
-            top: 12px;
-            right: 12px;
+            position: fixed;
+            top: 8px;
+            right: 8px;
             color: #00e5cc;
-            font-size: 11px;
-            background: rgba(11, 15, 26, 0.85);
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(0, 229, 204, 0.3);
+            font-size: 10px;
+            background: rgba(10, 14, 23, 0.9);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 229, 204, 0.2);
             pointer-events: none;
-            z-index: 10;
+            z-index: 100;
         }
     </style>
 </head>
 <body>
-    <div id="workspace-container">
-        <!-- PixiJS canvas renders here -->
-    </div>
+    <div id="workspace-container"></div>
 
     <div id="workspace-hud">
-        <h1>HERMES WORKSPACE</h1>
-        <p>Tile-Based 2D Office</p>
+        <h1>HERMES OFFICE SIM</h1>
+        <p>Tile-Based 2D Simulation</p>
     </div>
 
-    <div id="room-label">Loading...</div>
+    <div id="room-label">Initializing...</div>
     <div id="agent-count">Agents: ...</div>
 
     <!-- PixiJS 7.x CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
 
-    <!-- Tile-based Workspace Renderer -->
+    <!-- Tile-based 2D Office Simulation Renderer -->
     <script src="pixi-workspace.js"></script>
 </body>
 </html>
