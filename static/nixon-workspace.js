@@ -1,776 +1,138 @@
-// NIXON Workspace - Interactive Dashboard JavaScript
+/* =========================================================
+   NIXON Workspace - Clean Rebuild
+   - Navbar interactions (mobile menu, active state)
+   - Agents positioned inside #workspace-map (NOT in .room)
+   - Smooth movement between rooms via top/left transitions
+   ========================================================= */
 
-class NixonWorkspace {
-    constructor() {
-        this.agents = [
-            {
-                id: 'coordinator',
-                name: 'Coordinator',
-                role: 'Coordinator',
-                status: 'working',
-                currentTask: 'Managing workflows',
-                room: 'command-center',
-                tasks: ['Workflow optimization', 'Team coordination', 'Performance monitoring'],
-                avatar: 'C'
-            },
-            {
-                id: 'developer',
-                name: 'Developer',
-                role: 'Developer',
-                status: 'working',
-                currentTask: 'Building features',
-                room: 'developer-zone',
-                tasks: ['API development', 'Feature implementation', 'Code review'],
-                avatar: 'D'
-            },
-            {
-                id: 'developer-2',
-                name: 'Developer 2',
-                role: 'Developer',
-                status: 'working',
-                currentTask: 'Bug fixing',
-                room: 'developer-zone',
-                tasks: ['Bug fixes', 'Testing', 'Documentation'],
-                avatar: 'D2'
-            },
-            {
-                id: 'devops',
-                name: 'DevOps',
-                role: 'DevOps',
-                status: 'online',
-                currentTask: 'Server maintenance',
-                room: 'server-room',
-                tasks: ['Infrastructure monitoring', 'Deployment automation', 'Security patches'],
-                avatar: 'O'
-            },
-            {
-                id: 'researcher',
-                name: 'Researcher',
-                role: 'Researcher',
-                status: 'researching',
-                currentTask: 'Data analysis',
-                room: 'research-lab',
-                tasks: ['Market research', 'Data mining', 'Trend analysis'],
-                avatar: 'R'
-            },
-            {
-                id: 'analyst',
-                name: 'Analyst',
-                role: 'Analyst',
-                status: 'researching',
-                currentTask: 'Performance review',
-                room: 'research-lab',
-                tasks: ['Performance metrics', 'Usage analytics', 'Report generation'],
-                avatar: 'A'
-            },
-            {
-                id: 'security',
-                name: 'Security',
-                role: 'Security',
-                status: 'idle',
-                currentTask: 'Security audit',
-                room: 'deployment-hub',
-                tasks: ['Security scanning', 'Vulnerability assessment', 'Compliance check'],
-                avatar: 'S'
-            }
-        ];
+(function () {
+    'use strict';
 
-        this.tasks = [
-            {
-                id: 'api-optimization',
-                title: 'API Optimization',
-                progress: 75,
-                priority: 'high',
-                assignedAgent: 'developer',
-                stage: 'testing'
-            },
-            {
-                id: 'security-audit',
-                title: 'Security Audit',
-                progress: 45,
-                priority: 'medium',
-                assignedAgent: 'security',
-                stage: 'development'
-            },
-            {
-                id: 'documentation-update',
-                title: 'Documentation Update',
-                progress: 20,
-                priority: 'low',
-                assignedAgent: 'developer-2',
-                stage: 'development'
-            }
-        ];
+    // ---- Room layout (matches CSS percentages exactly) ----
+    // Stored as bounding boxes in % so we can place agents *inside*
+    // each room without parenting them to the .room element.
+    const ROOMS = {
+        engineering: { top: 5,  left: 5,   width: 40, height: 40 },
+        research:    { top: 5,  left: 55,  width: 40, height: 40 },  // right:5% -> left:55%
+        operations:  { top: 55, left: 5,   width: 40, height: 40 },  // bottom:5% -> top:55%
+        meeting:     { top: 55, left: 55,  width: 40, height: 40 },
+        lounge:      { top: 40, left: 40,  width: 20, height: 20 }
+    };
 
-        this.systemMetrics = {
-            uptime: 98.5,
-            responseTime: 42,
-            memory: 64,
-            activeAgents: 7,
-            completedTasks: 156,
-            activeProjects: 12
+    const ROOM_KEYS = Object.keys(ROOMS);
+
+    // ---- Helpers ----
+    function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+    }
+
+    /**
+     * Compute a random point (in % of the workspace) inside a given room,
+     * keeping a small padding so agents stay clearly within the room walls
+     * and don't collide with the room label.
+     */
+    function pointInRoom(roomName) {
+        const r = ROOMS[roomName];
+        if (!r) return { top: 50, left: 50 };
+        const padX = 4;             // % padding inside room
+        const padTop = 8;           // larger padding to avoid label
+        const padBottom = 4;
+
+        const minLeft = r.left + padX;
+        const maxLeft = r.left + r.width - padX;
+        const minTop = r.top + padTop;
+        const maxTop = r.top + r.height - padBottom;
+
+        const left = minLeft + Math.random() * (maxLeft - minLeft);
+        const top = minTop + Math.random() * (maxTop - minTop);
+
+        // Clamp to viewport bounds (defensive)
+        return {
+            top: clamp(top, 2, 98),
+            left: clamp(left, 2, 98)
         };
-
-        this.currentPanel = 'Task Pipeline';
-        this.init();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.startAgentSimulation();
-        this.startMetricsUpdates();
-        this.setupPanelSwitching();
-        this.setupAgentInteractions();
-        this.updateDashboard();
-        
-        console.log('NIXON Workspace initialized successfully');
-    }
-
-    setupEventListeners() {
-        // Navigation items
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', () => this.handleNavigation(item));
-        });
-
-        // Control buttons
-        document.querySelectorAll('.control-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.handleControlAction(btn));
-        });
-
-        // Search functionality
-        const searchInput = document.querySelector('.search-bar input');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
-        }
-
-        // Room interactions
-        document.querySelectorAll('.office-room').forEach(room => {
-            room.addEventListener('click', () => this.handleRoomClick(room));
-        });
-
-        // Agent avatars
-        document.querySelectorAll('.agent-avatar').forEach(avatar => {
-            avatar.addEventListener('click', () => this.handleAgentClick(avatar));
-        });
-    }
-
-    handleNavigation(navItem) {
-        // Remove active class from all nav items
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        
-        // Add active class to clicked item
-        navItem.classList.add('active');
-        
-        const section = navItem.querySelector('span').textContent;
-        this.showSection(section);
-        
-        // Add visual feedback
-        this.showNotification(`Switched to ${section}`);
-    }
-
-    showSection(section) {
-        // This would typically show/hide different views
-        console.log(`Navigating to: ${section}`);
-        
-        // Update workspace header
-        const workspaceHeader = document.querySelector('.workspace-header h1');
-        if (workspaceHeader) {
-            workspaceHeader.textContent = `${section} - AI Operations Center`;
-        }
-    }
-
-    handleControlAction(btn) {
-        const action = btn.querySelector('span') ? btn.querySelector('span').textContent : btn.textContent;
-        
-        switch(action.trim()) {
-            case 'Full View':
-                this.toggleFullView();
-                break;
-            case 'Pause':
-                this.pauseSimulation();
-                break;
-            case 'Run All':
-                this.runAllAgents();
-                break;
-        }
-        
-        this.showNotification(`Action: ${action}`);
-    }
-
-    toggleFullView() {
-        const leftSidebar = document.querySelector('.left-sidebar');
-        const rightSidebar = document.querySelector('.right-sidebar');
-        const bottomPanels = document.querySelector('.bottom-panels');
-        
-        [leftSidebar, rightSidebar, bottomPanels].forEach(element => {
-            if (element) {
-                element.style.display = element.style.display === 'none' ? '' : 'none';
-            }
-        });
-    }
-
-    pauseSimulation() {
-        this.simulationPaused = !this.simulationPaused;
-        const btn = document.querySelector('.control-btn:nth-child(2)');
-        if (btn) {
-            const icon = btn.querySelector('i');
-            const text = btn.querySelector('span');
-            if (this.simulationPaused) {
-                icon.className = 'fas fa-play';
-                text.textContent = 'Resume';
-            } else {
-                icon.className = 'fas fa-pause';
-                text.textContent = 'Pause';
-            }
-        }
-    }
-
-    runAllAgents() {
-        this.agents.forEach(agent => {
-            agent.status = 'busy';
-            this.updateAgentStatus(agent.id, 'busy');
-        });
-        
-        setTimeout(() => {
-            this.agents.forEach(agent => {
-                agent.status = 'online';
-                this.updateAgentStatus(agent.id, 'online');
-            });
-        }, 3000);
-    }
-
-    handleSearch(query) {
-        try {
-            if (!query) return;
-            
-            const results = [
-                ...this.agents.filter(agent => 
-                    agent.name.toLowerCase().includes(query.toLowerCase()) ||
-                    agent.currentTask.toLowerCase().includes(query.toLowerCase())
-                ),
-                ...this.tasks.filter(task => 
-                    task.title.toLowerCase().includes(query.toLowerCase())
-                )
-            ];
-            
-            console.log('Search results:', results);
-            this.showNotification(`Found ${results.length} results for "${query}"`);
-        } catch (error) {
-            console.error('Search error:', error);
-            this.showNotification('Search failed. Please try again.');
-        }
-    }
-
-    handleRoomClick(room) {
-        const roomName = room.querySelector('.room-header h3').textContent;
-        this.highlightRoom(room);
-        this.showNotification(`Viewing ${roomName}`);
-        
-        // Show room details
-        this.showRoomDetails(roomName);
-    }
-
-    highlightRoom(room) {
-        // Remove highlight from all rooms
-        document.querySelectorAll('.office-room').forEach(r => {
-            r.style.boxShadow = '';
-            r.style.borderColor = '';
-        });
-        
-        // Highlight selected room
-        room.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.2)';
-        room.style.borderColor = 'var(--color-primary)';
-    }
-
-    showRoomDetails(roomName) {
-        const roomAgents = this.agents.filter(agent => 
-            agent.room === roomName.toLowerCase().replace(/\s+/g, '-')
-        );
-        
-        console.log(`${roomName} has ${roomAgents.length} agents:`, roomAgents);
-    }
-
-    handleAgentClick(avatar) {
-        const agentRole = avatar.getAttribute('data-role');
-        const agent = this.agents.find(a => a.role === agentRole);
-        
-        if (agent) {
-            this.showAgentDetails(agent);
-        }
-    }
-
-    showAgentDetails(agent) {
-        // Create a modal or tooltip with agent details
-        this.showNotification(`${agent.name}: ${agent.currentTask}`);
-
-        // Highlight the agent without using transform:scale (broke mobile layout).
-        // Use a glowing ring + box-shadow pulse instead.
-        const agentElement = document.querySelector(`[data-role="${agent.role}"]`);
-        if (agentElement) {
-            const prevShadow = agentElement.style.boxShadow;
-            agentElement.style.boxShadow = '0 0 0 6px rgba(37, 99, 235, 0.35), 0 10px 20px rgba(0,0,0,0.25)';
-            setTimeout(() => {
-                agentElement.style.boxShadow = prevShadow;
-            }, 600);
-        }
-
-        console.log('Agent details:', agent);
-    }
-
-    startAgentSimulation() {
-        this.simulationInterval = setInterval(() => {
-            try {
-                if (this.simulationPaused) return;
-                
-                // Randomly update agent tasks and statuses
-                this.agents.forEach(agent => {
-                    if (Math.random() < 0.1) { // 10% chance to change task
-                        const newTask = agent.tasks[Math.floor(Math.random() * agent.tasks.length)];
-                        agent.currentTask = newTask;
-                        this.updateAgentInSidebar(agent);
-                    }
-                    
-                    if (Math.random() < 0.05) { // 5% chance to change status
-                        const statuses = ['working', 'researching', 'meeting', 'idle', 'online'];
-                        agent.status = statuses[Math.floor(Math.random() * statuses.length)];
-                        this.updateAgentStatus(agent.id, agent.status);
-                    }
-                });
-                
-                // Update 2D workspace with current agent data
-                renderAgents(this.agents);
-                
-                // Update task progress
-                this.tasks.forEach(task => {
-                    if (Math.random() < 0.3) { // 30% chance to progress
-                        task.progress = Math.min(100, task.progress + Math.floor(Math.random() * 5));
-                        this.updateTaskProgress(task);
-                    }
-                });
-                
-            } catch (error) {
-                console.error('Simulation error:', error);
-            }
-        }, 2000); // Update every 2 seconds
-    }
-
-    updateAgentStatus(agentId, status) {
-        const agentElements = document.querySelectorAll(`[data-role*="${agentId}"], .${agentId}`);
-        agentElements.forEach(element => {
-            const statusIndicator = element.querySelector('.status-indicator') || element.querySelector('.status-dot');
-            if (statusIndicator) {
-                statusIndicator.className = statusIndicator.className.replace(/(online|busy|offline)/, status);
-            }
-        });
-        
-        // Update 2D workspace
-        renderAgents(this.agents);
-    }
-
-    updateAgentInSidebar(agent) {
-        const agentItems = document.querySelectorAll('.agent-item');
-        agentItems.forEach(item => {
-            const nameElement = item.querySelector('.agent-name');
-            if (nameElement && nameElement.textContent === agent.name) {
-                const taskElement = item.querySelector('.agent-task');
-                if (taskElement) {
-                    taskElement.textContent = agent.currentTask;
-                }
-            }
-        });
-    }
-
-    updateTaskProgress(task) {
-        const taskItems = document.querySelectorAll('.task-item');
-        taskItems.forEach(item => {
-            const titleElement = item.querySelector('.task-title');
-            if (titleElement && titleElement.textContent === task.title) {
-                const progressElement = item.querySelector('.task-progress');
-                if (progressElement) {
-                    progressElement.textContent = `${task.progress}% complete`;
-                }
-            }
-        });
-        
-        // Update pipeline if task is there
-        this.updatePipelineProgress(task);
-    }
-
-    updatePipelineProgress(task) {
-        const pipelineTasks = document.querySelectorAll('.pipeline-task');
-        pipelineTasks.forEach(pipelineTask => {
-            if (pipelineTask.textContent.includes(task.title.split(' ')[0])) {
-                if (task.progress >= 75) {
-                    pipelineTask.classList.add('active');
-                } else {
-                    pipelineTask.classList.remove('active');
-                }
-            }
-        });
-    }
-
-    startMetricsUpdates() {
-        setInterval(() => {
-            // Update system metrics with realistic variations
-            this.systemMetrics.responseTime += Math.floor(Math.random() * 10) - 5;
-            this.systemMetrics.responseTime = Math.max(20, Math.min(100, this.systemMetrics.responseTime));
-            
-            this.systemMetrics.memory += Math.floor(Math.random() * 4) - 2;
-            this.systemMetrics.memory = Math.max(30, Math.min(90, this.systemMetrics.memory));
-            
-            this.updateMetricsDisplay();
-        }, 5000); // Update every 5 seconds
-    }
-
-    updateMetricsDisplay() {
-        const statusCards = document.querySelectorAll('.status-card');
-        statusCards.forEach(card => {
-            const label = card.querySelector('.status-label').textContent;
-            const valueElement = card.querySelector('.status-value');
-            
-            switch(label) {
-                case 'Response':
-                    valueElement.textContent = `${this.systemMetrics.responseTime}ms`;
-                    break;
-                case 'Memory':
-                    valueElement.textContent = `${this.systemMetrics.memory}%`;
-                    break;
-            }
-        });
-    }
-
-    setupPanelSwitching() {
-        const panelTabs = document.querySelectorAll('.panel-tab');
-        panelTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs
-                panelTabs.forEach(t => t.classList.remove('active'));
-                // Add active class to clicked tab
-                tab.classList.add('active');
-                
-                this.currentPanel = tab.textContent;
-                this.updatePanelContent();
+    // ---- Navbar interactions ----
+    function initNavbar() {
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                // Close mobile menu after pick
+                document.body.classList.remove('menu-open');
             });
         });
-    }
 
-    updatePanelContent() {
-        const panelContent = document.querySelector('.panel-content');
-        if (!panelContent) return;
-        
-        switch(this.currentPanel) {
-            case 'Task Pipeline':
-                panelContent.innerHTML = this.generatePipelineView();
-                break;
-            case 'Live Activity':
-                panelContent.innerHTML = this.generateActivityView();
-                break;
-            case 'Server Health':
-                panelContent.innerHTML = this.generateServerHealthView();
-                break;
-            case 'AI Workflow':
-                panelContent.innerHTML = this.generateWorkflowView();
-                break;
+        const menuToggle = document.getElementById('menu-toggle');
+        if (menuToggle) {
+            menuToggle.addEventListener('click', () => {
+                document.body.classList.toggle('menu-open');
+            });
         }
+
+        // Close menu on resize back to desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                document.body.classList.remove('menu-open');
+            }
+        });
     }
 
-    generatePipelineView() {
-        return `
-            <div class="pipeline-view">
-                <div class="pipeline-stage">
-                    <div class="stage-header">Development</div>
-                    <div class="stage-tasks">
-                        <div class="pipeline-task">Feature Implementation</div>
-                        <div class="pipeline-task">Code Review</div>
-                    </div>
-                </div>
-                <div class="pipeline-arrow">→</div>
-                <div class="pipeline-stage">
-                    <div class="stage-header">Testing</div>
-                    <div class="stage-tasks">
-                        <div class="pipeline-task active">Unit Tests</div>
-                        <div class="pipeline-task">Integration Tests</div>
-                    </div>
-                </div>
-                <div class="pipeline-arrow">→</div>
-                <div class="pipeline-stage">
-                    <div class="stage-header">Deployment</div>
-                    <div class="stage-tasks">
-                        <div class="pipeline-task">Staging</div>
-                        <div class="pipeline-task">Production</div>
-                    </div>
-                </div>
-            </div>
-        `;
+    // ---- Agents ----
+    function placeAgent(agent) {
+        const roomName = agent.dataset.room || 'lounge';
+        const pos = pointInRoom(roomName);
+        agent.style.top = pos.top + '%';
+        agent.style.left = pos.left + '%';
     }
 
-    generateActivityView() {
-        const recentActivities = [
-            '🔧 DevOps agent updated server configuration',
-            '💡 Researcher completed market analysis',
-            '🚀 Developer deployed new feature to staging',
-            '🔍 Security agent completed vulnerability scan',
-            '📊 Analyst generated performance report'
-        ];
+    function initAgents() {
+        const agents = document.querySelectorAll('.agent');
+        // Initial placement
+        agents.forEach(placeAgent);
 
-        return `
-            <div class="activity-feed" style="padding: 20px;">
-                <h3 style="margin-bottom: 20px; color: var(--text-primary);">Recent Activity</h3>
-                ${recentActivities.map(activity => `
-                    <div style="padding: 12px; margin-bottom: 8px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
-                        ${activity}
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    generateServerHealthView() {
-        return `
-            <div class="server-health" style="padding: 20px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                    <div style="padding: 20px; background: var(--bg-secondary); border-radius: 12px;">
-                        <h4 style="color: var(--text-primary); margin-bottom: 10px;">CPU Usage</h4>
-                        <div style="font-size: 24px; font-weight: bold; color: var(--color-success);">34%</div>
-                    </div>
-                    <div style="padding: 20px; background: var(--bg-secondary); border-radius: 12px;">
-                        <h4 style="color: var(--text-primary); margin-bottom: 10px;">Memory</h4>
-                        <div style="font-size: 24px; font-weight: bold; color: var(--color-warning);">${this.systemMetrics.memory}%</div>
-                    </div>
-                    <div style="padding: 20px; background: var(--bg-secondary); border-radius: 12px;">
-                        <h4 style="color: var(--text-primary); margin-bottom: 10px;">Network</h4>
-                        <div style="font-size: 24px; font-weight: bold; color: var(--color-success);">Normal</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    generateWorkflowView() {
-        return `
-            <div class="workflow-diagram" style="padding: 20px;">
-                <h3 style="margin-bottom: 20px; color: var(--text-primary);">AI Workflow Overview</h3>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 30px;">
-                    <div style="padding: 15px; background: var(--color-primary); color: white; border-radius: 8px; text-align: center;">
-                        Input Processing
-                    </div>
-                    <div style="font-size: 20px;">→</div>
-                    <div style="padding: 15px; background: var(--color-secondary); color: white; border-radius: 8px; text-align: center;">
-                        Agent Assignment
-                    </div>
-                    <div style="font-size: 20px;">→</div>
-                    <div style="padding: 15px; background: var(--color-success); color: white; border-radius: 8px; text-align: center;">
-                        Task Execution
-                    </div>
-                    <div style="font-size: 20px;">→</div>
-                    <div style="padding: 15px; background: var(--color-accent); color: white; border-radius: 8px; text-align: center;">
-                        Output Delivery
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    setupAgentInteractions() {
-        // Make agents move periodically
+        // Periodically move some agents around (within their room or to a new room)
         setInterval(() => {
-            if (this.simulationPaused) return;
-            
-            const agents = document.querySelectorAll('.agent-avatar');
             agents.forEach(agent => {
-                if (Math.random() < 0.3) { // 30% chance to animate
-                    this.animateAgent(agent);
+                // 70% chance to shuffle within the same room, 30% to roam to another room
+                const roam = Math.random() < 0.3;
+                if (roam) {
+                    const next = ROOM_KEYS[Math.floor(Math.random() * ROOM_KEYS.length)];
+                    agent.dataset.room = next;
                 }
+                placeAgent(agent);
             });
-        }, 3000);
+        }, 4000);
     }
 
-    animateAgent(agent) {
-        const originalTransform = agent.style.transform;
-        const movements = [
-            'translateX(5px)',
-            'translateX(-5px)',
-            'translateY(5px)',
-            'translateY(-5px)'
-        ];
-        
-        const movement = movements[Math.floor(Math.random() * movements.length)];
-        agent.style.transform = movement;
-        agent.style.transition = 'transform 0.5s ease-in-out';
-        
-        setTimeout(() => {
-            agent.style.transform = originalTransform;
-        }, 500);
+    // ---- HUD live updates ----
+    function initHud() {
+        const elTasks = document.getElementById('hud-tasks');
+        const elUptime = document.getElementById('hud-uptime');
+        if (!elTasks || !elUptime) return;
+
+        setInterval(() => {
+            // Drift values slightly so the HUD feels alive
+            const tasks = 8 + Math.floor(Math.random() * 12);
+            const uptime = (98 + Math.random() * 1.9).toFixed(1) + '%';
+            elTasks.textContent = tasks;
+            elUptime.textContent = uptime;
+        }, 5000);
     }
 
-    updateDashboard() {
-        // Update counters in navigation
-        document.querySelector('.nav-item:nth-child(3) .nav-badge').textContent = this.agents.length;
-        document.querySelector('.nav-item:nth-child(4) .nav-badge').textContent = this.tasks.length;
-        
-        // Update notification badge
-        const notificationBadge = document.querySelector('.notification-badge');
-        if (notificationBadge) {
-            notificationBadge.textContent = '3';
-        }
-        
-        // Initial render of 2D workspace
-        renderAgents(this.agents);
+    // ---- Boot ----
+    function boot() {
+        initNavbar();
+        initAgents();
+        initHud();
     }
 
-    showNotification(message) {
-        // Create a simple toast notification
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--color-primary);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: var(--shadow-lg);
-            z-index: 1000;
-            font-size: 14px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        `;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        // Fade in
-        setTimeout(() => notification.style.opacity = '1', 10);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => document.body.removeChild(notification), 300);
-        }, 3000);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
     }
-
-    destroy() {
-        if (this.simulationInterval) {
-            clearInterval(this.simulationInterval);
-        }
-    }
-}
-
-// 2D Workspace Functions
-function mapStatusToZone(status) {
-    if (status === 'researching') return 'zone-research';
-    if (status === 'working') return 'zone-engineering';
-    if (status === 'meeting') return 'zone-meeting';
-    if (status === 'idle') return 'zone-lounge';
-    return 'zone-operations';
-}
-
-// Map an agent role/name to one of the 4 sprite roles (dev/research/ops/manager).
-function mapRoleToSprite(agent) {
-    const role = (agent.role || '').toLowerCase();
-    const id = (agent.id || '').toLowerCase();
-    if (role === 'developer' || id.startsWith('developer')) return 'dev';
-    if (role === 'researcher' || role === 'analyst') return 'research';
-    if (role === 'devops' || role === 'security') return 'ops';
-    if (role === 'coordinator' || role === 'manager') return 'manager';
-    return 'dev';
-}
-
-function renderAgents(agents) {
-    const map = document.getElementById('workspace-map');
-    if (!map || !Array.isArray(agents)) return;
-
-    // Group agents by their target zone so multiple agents in the same zone
-    // can be spread out instead of stacked on top of each other.
-    const byZone = {};
-    agents.forEach(agent => {
-        const zoneId = mapStatusToZone(agent.status);
-        (byZone[zoneId] = byZone[zoneId] || []).push(agent);
-    });
-
-    Object.entries(byZone).forEach(([zoneId, list]) => {
-        const zone = document.getElementById(zoneId);
-        if (!zone) return;
-
-        const mapRect = map.getBoundingClientRect();
-        const zoneRect = zone.getBoundingClientRect();
-
-        list.forEach((agent, i) => {
-            let el = document.querySelector(`.agent[data-id="${agent.id}"]`);
-            if (!el) {
-                el = document.createElement('div');
-                el.className = 'agent';
-                el.dataset.id = agent.id;
-                el.dataset.role = mapRoleToSprite(agent);
-                el.title = `${agent.name} - ${agent.currentTask || ''}`;
-                // Render directly inside the workspace map (NOT inside a room
-                // div) so movement transitions can carry the sprite smoothly
-                // from one room's coordinates to another's.
-                map.appendChild(el);
-            }
-
-            // Keep status class in sync so CSS can react (idle/busy pulse).
-            const status = (agent.status || 'online').toLowerCase();
-            el.className = `agent status-${status}`;
-            el.dataset.role = mapRoleToSprite(agent);
-            el.title = `${agent.name} - ${agent.currentTask || ''}`;
-
-            const agentSize = el.offsetWidth || 28;
-            const half = agentSize / 2;
-
-            // Spread agents in a small grid inside the zone (max 3 per row),
-            // and add a tiny ±20px jitter so they look natural - not lined up.
-            const cols = Math.min(list.length, 3);
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const cellW = zoneRect.width / (cols + 1);
-            const cellH = Math.max(28, zoneRect.height / 4);
-
-            const offsetX = (col + 1) * cellW - zoneRect.width / 2;
-            const offsetY = row * cellH;
-            const jitterX = (Math.random() - 0.5) * 40; // +/- 20 px
-            const jitterY = (Math.random() - 0.5) * 40;
-
-            const relativeX = zoneRect.left - mapRect.left + (zoneRect.width / 2) + offsetX + jitterX - half;
-            const relativeY = zoneRect.top - mapRect.top + (zoneRect.height / 2) + offsetY + jitterY - half;
-
-            // Clamp inside the room walls so the sprite never overlaps the
-            // border outline.
-            const minX = zoneRect.left - mapRect.left + 4;
-            const maxX = zoneRect.left - mapRect.left + zoneRect.width - agentSize - 4;
-            const minY = zoneRect.top - mapRect.top + 4;
-            const maxY = zoneRect.top - mapRect.top + zoneRect.height - agentSize - 4;
-
-            el.style.left = Math.max(minX, Math.min(maxX, relativeX)) + 'px';
-            el.style.top = Math.max(minY, Math.min(maxY, relativeY)) + 'px';
-        });
-    });
-
-    // Drop any sprite whose agent no longer exists.
-    const liveIds = new Set(agents.map(a => a.id));
-    map.querySelectorAll('.agent').forEach(el => {
-        if (!liveIds.has(el.dataset.id)) el.remove();
-    });
-}
-
-// Re-position agents on resize/orientation change so the fixed full-screen map on
-// mobile keeps agents inside their zones.
-window.addEventListener('resize', () => {
-    if (window.nixonWorkspace && Array.isArray(window.nixonWorkspace.agents)) {
-        renderAgents(window.nixonWorkspace.agents);
-    }
-});
-
-// Initialize the workspace when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.nixonWorkspace = new NixonWorkspace();
-});
-
-// Handle page unload
-window.addEventListener('beforeunload', () => {
-    if (window.nixonWorkspace) {
-        window.nixonWorkspace.destroy();
-    }
-});
+})();
