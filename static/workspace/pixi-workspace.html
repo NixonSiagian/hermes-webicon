@@ -1,112 +1,237 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hermes 2D Office Simulation</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <!-- CRITICAL: no user-scaling, viewport-fit=cover for notched phones -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
+        user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0b0f1a" />
+  <title>Hermes Workspace</title>
 
-        html, body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #0a0e17;
-            font-family: 'Courier New', monospace;
-            touch-action: none;
-        }
+  <style>
+    /* ── Hard reset — NO scrollbars, NO overflow ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        #workspace-container {
-            width: 100vw;
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+      background: #0b0f1a;
+      font-family: 'Courier New', Courier, monospace;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
 
-        #workspace-container canvas {
-            display: block;
-            width: 100% !important;
-            height: 100% !important;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-        }
+    /* ── TOPBAR — fixed, 44px, never overlaps canvas ── */
+    #hud-topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 44px;
+      /* safe area for notched phones */
+      padding-top: env(safe-area-inset-top, 0);
+      z-index: 9999;
+      background: rgba(11, 15, 26, 0.96);
+      border-bottom: 1px solid rgba(0, 229, 204, 0.25);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 14px;
+      padding-right: 14px;
+      gap: 8px;
+    }
 
-        #workspace-hud {
-            position: fixed;
-            top: 8px;
-            left: 8px;
-            color: #00e5cc;
-            font-size: 11px;
-            pointer-events: none;
-            z-index: 100;
-            text-shadow: 0 0 4px rgba(0, 229, 204, 0.6);
-            background: rgba(10, 14, 23, 0.92);
-            padding: 6px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 229, 204, 0.3);
-        }
+    #hud-topbar-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #00e5cc;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
 
-        #workspace-hud h1 {
-            font-size: 11px;
-            font-weight: 700;
-            margin-bottom: 2px;
-            letter-spacing: 1.5px;
-        }
+    #agent-count {
+      font-size: 10px;
+      color: rgba(0, 229, 204, 0.75);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      text-align: center;
+    }
 
-        #workspace-hud p {
-            opacity: 0.65;
-            font-size: 9px;
-        }
+    #exit-btn {
+      flex-shrink: 0;
+      padding: 5px 12px;
+      background: rgba(0, 229, 204, 0.08);
+      border: 1px solid rgba(0, 229, 204, 0.3);
+      border-radius: 5px;
+      color: #00e5cc;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: background 0.15s;
+      touch-action: manipulation;
+    }
+    #exit-btn:active {
+      background: rgba(0, 229, 204, 0.22);
+    }
 
-        #room-label {
-            position: fixed;
-            bottom: 8px;
-            left: 8px;
-            color: #aabbcc;
-            font-size: 10px;
-            background: rgba(10, 14, 23, 0.9);
-            padding: 5px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 229, 204, 0.2);
-            pointer-events: none;
-            z-index: 100;
-        }
+    /* ── CANVAS CONTAINER — full window minus topbar ── */
+    #workspace-container {
+      position: fixed;
+      top: calc(44px + env(safe-area-inset-top, 0px));
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      background: #0a0e17;
+      touch-action: none;
+    }
 
-        #agent-count {
-            position: fixed;
-            top: 8px;
-            right: 8px;
-            color: #00e5cc;
-            font-size: 10px;
-            background: rgba(10, 14, 23, 0.9);
-            padding: 5px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 229, 204, 0.2);
-            pointer-events: none;
-            z-index: 100;
-        }
-    </style>
+    #workspace-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      touch-action: none;
+    }
+
+    /* ── BOTTOM STATUS BAR ── */
+    #room-label {
+      position: fixed;
+      bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      left: 12px;
+      color: #7899aa;
+      font-size: 9px;
+      background: rgba(10, 14, 23, 0.88);
+      padding: 4px 9px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 229, 204, 0.15);
+      pointer-events: none;
+      z-index: 100;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── LOADING SCREEN ── */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: #0b0f1a;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      transition: opacity 0.4s ease;
+    }
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #00e5cc;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    #loading-sub {
+      font-size: 11px;
+      color: rgba(0, 229, 204, 0.5);
+      letter-spacing: 1px;
+    }
+    .loading-bar-wrap {
+      width: 180px;
+      height: 3px;
+      background: rgba(0, 229, 204, 0.15);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .loading-bar-fill {
+      height: 100%;
+      background: #00e5cc;
+      border-radius: 2px;
+      animation: loadPulse 1.4s ease-in-out infinite;
+    }
+    @keyframes loadPulse {
+      0%   { width: 0%; }
+      50%  { width: 80%; }
+      100% { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-    <div id="workspace-container"></div>
 
-    <div id="workspace-hud">
-        <h1>HERMES OFFICE SIM</h1>
-        <p>Tile-Based 2D Simulation</p>
-    </div>
+  <!-- Loading overlay -->
+  <div id="loading-screen">
+    <div id="loading-title">Hermes Workspace</div>
+    <div id="loading-sub">Loading office simulation...</div>
+    <div class="loading-bar-wrap"><div class="loading-bar-fill"></div></div>
+  </div>
 
-    <div id="room-label">Initializing...</div>
-    <div id="agent-count">Agents: ...</div>
+  <!-- Fixed topbar: title | agent stats | exit -->
+  <div id="hud-topbar">
+    <span id="hud-topbar-title">Hermes Workspace</span>
+    <span id="agent-count">Initializing...</span>
+    <button id="exit-btn" onclick="exitWorkspace()">✕ Exit</button>
+  </div>
 
-    <!-- PixiJS 7.x CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+  <!-- PixiJS canvas mounts here — positioned BELOW topbar -->
+  <div id="workspace-container"></div>
 
-    <!-- Tile-based 2D Office Simulation Renderer -->
-    <script src="pixi-workspace.js"></script>
+  <!-- Bottom info bar -->
+  <div id="room-label">Tile-Based Office Sim</div>
+
+  <!-- PixiJS 7 CDN — proven stable version -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"
+          integrity="sha512-byNBXBDfWMKN8MEWI67cAqpO6Hh7UVeiFa50BKaQl8UkzIcBm3zU0FaVzU+vSVqo5PKVmGVdVALW6Uu7i5Lg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- Main simulation script -->
+  <script src="pixi-workspace.js"></script>
+
+  <script>
+    // Hide loading screen once PixiJS starts rendering
+    var _loadCheck = setInterval(function () {
+      var canvas = document.querySelector('#workspace-container canvas');
+      if (canvas) {
+        clearInterval(_loadCheck);
+        setTimeout(function () {
+          var ls = document.getElementById('loading-screen');
+          if (ls) ls.classList.add('hidden');
+        }, 600);
+      }
+    }, 100);
+
+    // Exit handler — posts message to parent frame (gamified-workspace.js)
+    function exitWorkspace() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'workspace-close' }, '*');
+      } else {
+        window.history.back();
+      }
+    }
+
+    // Prevent page-level scroll/bounce on iOS
+    document.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+
+    // Block context menu on long-press (mobile)
+    document.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+    });
+  </script>
 </body>
 </html>

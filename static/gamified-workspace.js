@@ -38,22 +38,15 @@
 
     const workspaceHTML = `
       <div id="workspace-fullscreen" class="workspace-fullscreen">
-        <!-- Topbar -->
-        <div class="workspace-topbar">
-          <div class="workspace-topbar-title">HERMES WORKSPACE</div>
-          <button class="workspace-close-btn" id="workspace-close-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-            Exit
-          </button>
+        <!-- Outer topbar hidden via CSS — topbar lives inside iframe -->
+        <div class="workspace-topbar" style="display:none;">
+          <button class="workspace-close-btn" id="workspace-close-btn">Exit</button>
         </div>
 
-        <!-- PixiJS Tile-Based Workspace (iframe) -->
+        <!-- PixiJS Tile-Based Workspace (fullscreen iframe) -->
         <iframe id="workspace-pixi-frame"
                 src="${PIXI_WORKSPACE_URL}"
-                style="width:100%; height:100%; border:none; display:block;"
+                style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"
                 allowfullscreen></iframe>
       </div>
     `;
@@ -109,6 +102,13 @@
     // Escape key to close
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && WorkspaceState.active) {
+        closeWorkspace();
+      }
+    });
+
+    // Listen for postMessage from the iframe exit button
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'workspace-close') {
         closeWorkspace();
       }
     });

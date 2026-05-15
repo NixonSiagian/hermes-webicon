@@ -22,27 +22,16 @@
   background: #0b0f1a;
   display: none;
   overflow: hidden;
-  flex-direction: column;
+  /* No flex-column — iframe fills ALL space. Topbar lives INSIDE iframe. */
 }
 
 .workspace-fullscreen.active {
-  display: flex;
+  display: block;
 }
 
-/* ── Workspace Topbar ── */
+/* ── Outer topbar: HIDDEN — the iframe has its own fixed topbar ── */
 .workspace-topbar {
-  position: relative;
-  z-index: 201;
-  height: 48px;
-  width: 100%;
-  background: rgba(11, 15, 26, 0.95);
-  border-bottom: 1px solid rgba(0, 229, 204, 0.2);
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  flex-shrink: 0;
+  display: none !important;
 }
 
 .workspace-topbar-title {
