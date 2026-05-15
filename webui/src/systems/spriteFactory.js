@@ -21,6 +21,16 @@ const PALETTES = {
     shoes: 0x1f2937,
     accessory: 0x60a5fa, // headphones
   },
+  developer: {
+    skin: 0xffdbac,
+    hair: 0x3d2314,
+    shirt: 0x2563eb,
+    shirtDark: 0x1d4ed8,
+    pants: 0x1e3a5f,
+    pantsDark: 0x172e4a,
+    shoes: 0x1f2937,
+    accessory: 0x60a5fa, // headphones
+  },
   researcher: {
     skin: 0xf5c5a3,
     hair: 0xfbbf24,
@@ -40,6 +50,16 @@ const PALETTES = {
     pantsDark: 0x143026,
     shoes: 0x111827,
     accessory: 0x34d399, // badge
+  },
+  manager: {
+    skin: 0xffe0bd,
+    hair: 0x2c1810,
+    shirt: 0x7c3aed,
+    shirtDark: 0x6d28d9,
+    pants: 0x2e1065,
+    pantsDark: 0x1e0a45,
+    shoes: 0x1f2937,
+    accessory: 0xc084fc, // tie
   },
 };
 
@@ -321,6 +341,7 @@ export function createStatusDot(app, state) {
   const g = new PIXI.Graphics();
   const colors = {
     idle: 0x6b7280,
+    moving: 0x3b82f6,
     walking: 0x3b82f6,
     working: 0x10b981,
     thinking: 0xf59e0b,
@@ -339,5 +360,40 @@ export function createStatusDot(app, state) {
   const texture = PIXI.RenderTexture.create({ width: 10, height: 10 });
   app.renderer.render(g, { renderTexture: texture });
   g.destroy();
+  return texture;
+}
+
+/**
+ * Create an activity label texture (shows current task above agent)
+ */
+export function createActivityLabel(app, activity) {
+  const text = new PIXI.Text(activity || '', {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '600',
+    fill: 0xa5f3fc,
+    align: 'center',
+  });
+
+  const padding = 4;
+  const container = new PIXI.Container();
+  
+  const bg = new PIXI.Graphics();
+  bg.beginFill(0x0b1628, 0.9);
+  bg.lineStyle(1, 0x22d3ee, 0.4);
+  bg.drawRoundedRect(0, 0, text.width + padding * 2, text.height + 4, 3);
+  bg.endFill();
+
+  container.addChild(bg);
+  text.x = padding;
+  text.y = 2;
+  container.addChild(text);
+
+  const texture = PIXI.RenderTexture.create({
+    width: Math.max(text.width + padding * 2, 10),
+    height: text.height + 4,
+  });
+  app.renderer.render(container, { renderTexture: texture });
+  container.destroy(true);
   return texture;
 }

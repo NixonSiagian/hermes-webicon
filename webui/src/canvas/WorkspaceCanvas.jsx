@@ -3,19 +3,20 @@ import * as PIXI from 'pixi.js';
 import { useWorkspaceStore, MAP_WIDTH, MAP_HEIGHT } from '../store/workspaceStore';
 import { renderTileMap, renderRoomLabels } from '../systems/tileRenderer';
 import { renderFurniture } from '../systems/furnitureRenderer';
-import { updateMovement } from '../systems/movementSystem';
+import { updateSimulation, getSimulationStats } from '../systems/simulationEngine';
 import { createAgentVisual, updateAgentVisual, destroyAgentVisual } from '../systems/agentSystem';
 
 /**
- * Main RimWorld-Style 2D Workspace Canvas
+ * Main 2D Workspace Canvas — Real Agent Simulation
  * 
- * Renders a tile-based office environment with:
- * - Floor tiles (multiple types per room)
- * - Thick wall blocks between rooms
- * - Furniture sprites with shadows
- * - Animated character agents with depth sorting
- * - Pan/zoom camera controls
- * - Mobile-friendly touch support
+ * This is a LIVING simulation where agents:
+ * - Pick jobs based on their role
+ * - Move to the correct room
+ * - Work at specific workstations
+ * - Complete tasks and pick new ones
+ * - Attend meetings, take breaks
+ * 
+ * NOT a static demo. Agents behave autonomously.
  */
 export default function WorkspaceCanvas() {
   const canvasRef = useRef(null);
@@ -25,8 +26,9 @@ export default function WorkspaceCanvas() {
   const agentLayerRef = useRef(null);
   const lastTimeRef = useRef(0);
   const agentsLocalRef = useRef([]);
+  const statsCallbackRef = useRef(null);
 
-  const { tileMap, rooms, agents, setSelectedAgent, zoom } = useWorkspaceStore();
+  const { tileMap, rooms, agents, setSelectedAgent, simulationRunning, simulationSpeed } = useWorkspaceStore();
 
   // Initialize PixiJS application and render world
   useEffect(() => {
@@ -84,27 +86,42 @@ export default function WorkspaceCanvas() {
     agentsLocalRef.current = agents.map((a) => ({ ...a }));
 
     // === LAYER 5: Ambient overlay (vignette) ===
-    const vignette = createVignette(app);
+    const vignette = createVignette();
     vignette.zIndex = 200;
     world.addChild(vignette);
 
-    // === GAME LOOP ===
+    // === GAME LOOP — The heart of the simulation ===
     lastTimeRef.current = performance.now();
     app.ticker.add(() => {
       const now = performance.now();
-      const dt = Math.min((now - lastTimeRef.current) / 1000, 0.1);
+      const rawDt = Math.min((now - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = now;
 
-      // Update movement
-      agentsLocalRef.current = updateMovement(agentsLocalRef.current, rooms, dt);
+      // Apply simulation speed
+      const running = useWorkspaceStore.getState().simulationRunning;
+      const speed = useWorkspaceStore.getState().simulationSpeed;
+      if (!running) return;
+      
+      const dt = rawDt * speed;
 
-      // Update agent visuals
+      // === SIMULATION TICK ===
+      agentsLocalRef.current = updateSimulation(agentsLocalRef.current, rooms, dt);
+
+      // === UPDATE VISUALS ===
       agentsLocalRef.current.forEach((agent) => {
         const visual = agentVisualsRef.current[agent.id];
         if (visual) {
           updateAgentVisual(visual, agent, dt);
         }
       });
+
+      // Update stats in store periodically (every ~30 frames)
+      if (Math.random() < 0.033) {
+        const stats = getSimulationStats(agentsLocalRef.current);
+        if (statsCallbackRef.current) {
+          statsCallbackRef.current(stats);
+        }
+      }
     });
 
     // === RESIZE HANDLER ===
@@ -119,7 +136,6 @@ export default function WorkspaceCanvas() {
     };
 
     window.addEventListener('resize', handleResize);
-    // Initial fit
     setTimeout(() => centerWorld(world, canvasRef.current), 60);
 
     return () => {
@@ -130,12 +146,12 @@ export default function WorkspaceCanvas() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync store agent changes (external task assignments)
+  // Sync external state changes into local sim
   useEffect(() => {
     agents.forEach((storeAgent) => {
       const localAgent = agentsLocalRef.current.find((a) => a.id === storeAgent.id);
-      if (localAgent && storeAgent.task !== localAgent.task) {
-        localAgent.task = storeAgent.task;
+      if (localAgent && storeAgent.currentJob !== localAgent.currentJob) {
+        localAgent.currentJob = storeAgent.currentJob;
         localAgent.state = storeAgent.state;
       }
     });
@@ -157,7 +173,6 @@ export default function WorkspaceCanvas() {
   const handlePointerMove = useCallback((e) => {
     if (!isPanning.current || !worldRef.current) return;
 
-    // Pinch zoom (multi-touch)
     if (e.touches && e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -173,7 +188,6 @@ export default function WorkspaceCanvas() {
       return;
     }
 
-    // Pan
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const dx = clientX - lastPanPos.current.x;
@@ -196,7 +210,6 @@ export default function WorkspaceCanvas() {
     const delta = e.deltaY > 0 ? 0.92 : 1.08;
     const newZoom = Math.max(0.4, Math.min(3, worldRef.current.scale.x * delta));
     
-    // Zoom toward mouse position
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -251,10 +264,7 @@ function centerWorld(world, container) {
 /**
  * Create ambient vignette overlay for atmosphere
  */
-function createVignette(app) {
-  const g = new PIXI.Graphics();
-  
-  // Subtle dark edges
+function createVignette() {
   const gradient = new PIXI.Graphics();
   gradient.beginFill(0x000000, 0.15);
   gradient.drawRect(0, 0, MAP_WIDTH, 20);

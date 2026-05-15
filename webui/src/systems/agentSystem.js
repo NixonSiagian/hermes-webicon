@@ -1,15 +1,19 @@
 /**
- * Agent System — RimWorld-style
+ * Agent Visual System — Living Simulation Sprites
  * 
- * Manages agent sprite instances in the PixiJS scene.
- * Agents are rendered as animated pixel-art characters
- * with shadows, name labels, status indicators, and thought bubbles.
- * Z-sorted by Y position for proper depth layering.
+ * Manages agent sprite instances with real visual feedback:
+ * - Walking animation when moving between rooms
+ * - Typing/working animation when at a desk
+ * - Thinking bubble when idle/planning
+ * - Activity label showing current task
+ * - Status indicators (color-coded by state)
+ * - Direction-aware sprite flipping
+ * - Y-sorted depth rendering
  */
 import * as PIXI from 'pixi.js';
-import { generateSpriteTextures, createThinkingBubble, createNameLabel, createStatusDot } from './spriteFactory';
+import { generateSpriteTextures, createThinkingBubble, createNameLabel, createStatusDot, createActivityLabel } from './spriteFactory';
 
-const SPRITE_SCALE = 0.85; // Scale factor for agent sprites relative to tile
+const SPRITE_SCALE = 0.85;
 
 /**
  * Create a visual agent instance in the PixiJS scene
@@ -23,7 +27,7 @@ export function createAgentVisual(app, agentData) {
 
   // Main character sprite
   const sprite = new PIXI.Sprite(textures.idle[0]);
-  sprite.anchor.set(0.5, 0.85); // Bottom-center anchor for proper ground alignment
+  sprite.anchor.set(0.5, 0.85);
   sprite.scale.set(SPRITE_SCALE);
   sprite.zIndex = 1;
   container.addChild(sprite);
@@ -44,10 +48,18 @@ export function createAgentVisual(app, agentData) {
   label.zIndex = 5;
   container.addChild(label);
 
+  // Activity label (shows current task)
+  const activityTexture = createActivityLabel(app, 'Initializing...');
+  const activityLabel = new PIXI.Sprite(activityTexture);
+  activityLabel.anchor.set(0.5, -1.8);
+  activityLabel.zIndex = 6;
+  activityLabel.alpha = 0;
+  container.addChild(activityLabel);
+
   // Status dot (above head)
   const statusTextures = {
     idle: createStatusDot(app, 'idle'),
-    walking: createStatusDot(app, 'walking'),
+    moving: createStatusDot(app, 'moving'),
     working: createStatusDot(app, 'working'),
     thinking: createStatusDot(app, 'thinking'),
   };
@@ -55,6 +67,12 @@ export function createAgentVisual(app, agentData) {
   statusDot.anchor.set(0.5, 2.5);
   statusDot.zIndex = 6;
   container.addChild(statusDot);
+
+  // Work effect particles (hidden by default)
+  const workEffect = createWorkEffect(app);
+  workEffect.visible = false;
+  workEffect.zIndex = 8;
+  container.addChild(workEffect);
 
   // Position
   container.x = agentData.x;
@@ -70,13 +88,46 @@ export function createAgentVisual(app, agentData) {
     sprite,
     bubble,
     label,
+    activityLabel,
     statusDot,
     statusTextures,
+    workEffect,
     textures,
     currentFrame: 0,
     frameTimer: 0,
     lastState: agentData.state,
+    lastActivity: '',
+    activityFadeTimer: 0,
+    app,
   };
+}
+
+/**
+ * Create work effect (small particles for typing/working visual)
+ */
+function createWorkEffect(app) {
+  const container = new PIXI.Container();
+  
+  // Create small glowing dots that float up
+  for (let i = 0; i < 4; i++) {
+    const g = new PIXI.Graphics();
+    g.beginFill(0x60a5fa, 0.7);
+    g.drawCircle(0, 0, 1.5);
+    g.endFill();
+    
+    const texture = PIXI.RenderTexture.create({ width: 4, height: 4 });
+    app.renderer.render(g, { renderTexture: texture });
+    g.destroy();
+    
+    const particle = new PIXI.Sprite(texture);
+    particle.anchor.set(0.5);
+    particle.x = (Math.random() - 0.5) * 16;
+    particle.y = -20 - Math.random() * 10;
+    particle.alpha = 0;
+    container.addChild(particle);
+  }
+  
+  return container;
 }
 
 /**
@@ -90,42 +141,85 @@ export function updateAgentVisual(visual, agentData, dt) {
   // Direction (flip sprite horizontally)
   visual.sprite.scale.x = (agentData.direction >= 0 ? 1 : -1) * SPRITE_SCALE;
 
-  // Z-sorting by Y position (agents lower on screen appear in front)
+  // Z-sorting by Y position
   visual.container.zIndex = Math.floor(agentData.y) + 100;
 
-  // Animation frame update
+  // === ANIMATION FRAMES ===
   visual.frameTimer += dt;
-  const frameSpeed = agentData.state === 'walking' ? 0.12 : 0.35;
+  const frameSpeed = agentData.state === 'moving' ? 0.12 : 
+                     agentData.state === 'working' ? 0.25 : 0.4;
 
   if (visual.frameTimer >= frameSpeed) {
     visual.frameTimer = 0;
     visual.currentFrame = (visual.currentFrame + 1) % 4;
 
-    // Set texture based on state
-    const stateTextures = visual.textures[agentData.state] || visual.textures.idle;
+    // Map state to animation state
+    let animState = agentData.state;
+    if (animState === 'moving') animState = 'walking';
+    
+    const stateTextures = visual.textures[animState] || visual.textures.idle;
     if (stateTextures[visual.currentFrame]) {
       visual.sprite.texture = stateTextures[visual.currentFrame];
     }
   }
 
-  // Update status dot when state changes
+  // === STATUS DOT ===
   if (visual.lastState !== agentData.state) {
     visual.lastState = agentData.state;
-    const dotTex = visual.statusTextures[agentData.state] || visual.statusTextures.idle;
+    const stateKey = agentData.state === 'moving' ? 'moving' : agentData.state;
+    const dotTex = visual.statusTextures[stateKey] || visual.statusTextures.idle;
     visual.statusDot.texture = dotTex;
   }
 
-  // Thinking bubble visibility and animation
-  visual.bubble.visible = agentData.state === 'thinking';
-  if (agentData.state === 'thinking') {
+  // === THINKING BUBBLE ===
+  const showBubble = agentData.state === 'idle' && agentData.idleTimer > 0.5;
+  visual.bubble.visible = showBubble;
+  if (showBubble) {
     visual.bubble.y = Math.sin(Date.now() * 0.003) * 2 - 20;
+    visual.bubble.alpha = 0.8 + Math.sin(Date.now() * 0.005) * 0.2;
   }
 
-  // Subtle breathing/bob for idle
+  // === WORK EFFECT (particles when working) ===
+  if (agentData.state === 'working') {
+    visual.workEffect.visible = true;
+    const particles = visual.workEffect.children;
+    const time = Date.now() * 0.005;
+    particles.forEach((p, i) => {
+      const phase = time + i * 1.5;
+      p.y = -20 - (Math.sin(phase) * 0.5 + 0.5) * 12;
+      p.x = Math.cos(phase * 0.7 + i) * 8;
+      p.alpha = (Math.sin(phase) * 0.5 + 0.5) * 0.7;
+    });
+  } else {
+    visual.workEffect.visible = false;
+  }
+
+  // === IDLE BREATHING ===
   if (agentData.state === 'idle') {
-    visual.sprite.y = Math.sin(Date.now() * 0.002 + agentData.x) * 0.5;
+    visual.sprite.y = Math.sin(Date.now() * 0.002 + agentData.x) * 0.8;
+  } else if (agentData.state === 'working') {
+    // Small typing jitter
+    visual.sprite.y = Math.sin(Date.now() * 0.01) * 0.3;
+    visual.sprite.x = (agentData.direction >= 0 ? 1 : -1) * SPRITE_SCALE + Math.sin(Date.now() * 0.008) * 0.2;
   } else {
     visual.sprite.y = 0;
+  }
+
+  // === ACTIVITY LABEL (fade in/out) ===
+  if (agentData.activity && agentData.activity !== visual.lastActivity) {
+    visual.lastActivity = agentData.activity;
+    visual.activityFadeTimer = 3; // Show for 3 seconds
+    
+    // Recreate activity label texture
+    const newTexture = createActivityLabel(visual.app, agentData.activity);
+    visual.activityLabel.texture = newTexture;
+  }
+  
+  if (visual.activityFadeTimer > 0) {
+    visual.activityFadeTimer -= dt;
+    visual.activityLabel.alpha = Math.min(1, visual.activityFadeTimer / 0.5);
+  } else {
+    visual.activityLabel.alpha = Math.max(0, visual.activityLabel.alpha - dt * 2);
   }
 }
 
