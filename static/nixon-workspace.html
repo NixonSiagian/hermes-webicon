@@ -1,179 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <!-- PART 1: viewport -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0b0f1a">
-    <title>NIXON Workspace</title>
-    <link rel="stylesheet" href="nixon-workspace.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body>
-    <!-- PART 2: Navbar (fixed, always clickable) -->
-    <header class="navbar" role="banner">
-        <div class="navbar-inner">
-            <div class="brand">
-                <i class="fas fa-brain brand-icon" aria-hidden="true"></i>
-                <span class="brand-text">NIXON Workspace</span>
-            </div>
-
-            <nav class="nav-links" aria-label="Primary">
-                <a href="#" class="nav-link active" data-view="overview">
-                    <i class="fas fa-home" aria-hidden="true"></i>
-                    <span>Overview</span>
-                </a>
-                <a href="#" class="nav-link" data-view="agents">
-                    <i class="fas fa-users" aria-hidden="true"></i>
-                    <span>Agents</span>
-                </a>
-                <a href="#" class="nav-link" data-view="tasks">
-                    <i class="fas fa-tasks" aria-hidden="true"></i>
-                    <span>Tasks</span>
-                </a>
-                <a href="#" class="nav-link" data-view="settings">
-                    <i class="fas fa-cog" aria-hidden="true"></i>
-                    <span>Settings</span>
-                </a>
-            </nav>
-
-            <div class="nav-actions">
-                <button class="icon-btn" type="button" aria-label="Notifications">
-                    <i class="fas fa-bell" aria-hidden="true"></i>
-                    <span class="badge">3</span>
-                </button>
-                <button class="icon-btn menu-toggle" type="button" aria-label="Toggle menu" id="menu-toggle">
-                    <i class="fas fa-bars" aria-hidden="true"></i>
-                </button>
-                <div class="user-chip">
-                    <div class="avatar">N</div>
-                    <span class="user-name">Nixon</span>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- PART 4: Workspace map (isolated, below navbar) -->
-    <main id="workspace-map" aria-label="AI Office Workspace">
-        <!-- PART 6: Floor plan rooms -->
-        <section class="room engineering" data-room="engineering">
-            <div class="room-label">
-                <i class="fas fa-code" aria-hidden="true"></i>
-                <span>Engineering</span>
-            </div>
-            <div class="furniture">
-                <div class="desk" style="top:25%; left:15%;"></div>
-                <div class="chair" style="top:55%; left:24%;"></div>
-                <div class="desk" style="top:25%; left:55%;"></div>
-                <div class="chair" style="top:55%; left:64%;"></div>
-                <div class="desk" style="top:65%; left:35%;"></div>
-                <div class="chair" style="top:85%; left:44%;"></div>
-            </div>
-        </section>
-
-        <section class="room research" data-room="research">
-            <div class="room-label">
-                <i class="fas fa-flask" aria-hidden="true"></i>
-                <span>Research</span>
-            </div>
-            <div class="furniture">
-                <div class="desk" style="top:30%; left:20%;"></div>
-                <div class="chair" style="top:60%; left:29%;"></div>
-                <div class="desk" style="top:30%; left:60%;"></div>
-                <div class="chair" style="top:60%; left:69%;"></div>
-            </div>
-        </section>
-
-        <section class="room operations" data-room="operations">
-            <div class="room-label">
-                <i class="fas fa-server" aria-hidden="true"></i>
-                <span>Operations</span>
-            </div>
-            <div class="furniture">
-                <div class="desk" style="top:25%; left:15%;"></div>
-                <div class="chair" style="top:55%; left:24%;"></div>
-                <div class="desk" style="top:25%; left:60%;"></div>
-                <div class="chair" style="top:55%; left:69%;"></div>
-                <div class="desk" style="top:70%; left:38%;"></div>
-            </div>
-        </section>
-
-        <section class="room meeting" data-room="meeting">
-            <div class="room-label">
-                <i class="fas fa-comments" aria-hidden="true"></i>
-                <span>Meeting Room</span>
-            </div>
-            <div class="furniture">
-                <!-- Conference table = 4 desks side by side -->
-                <div class="desk" style="top:40%; left:20%; width:60%; height:25%; background:#4b5563;"></div>
-                <div class="chair" style="top:25%; left:30%;"></div>
-                <div class="chair" style="top:25%; left:55%;"></div>
-                <div class="chair" style="top:75%; left:30%;"></div>
-                <div class="chair" style="top:75%; left:55%;"></div>
-            </div>
-        </section>
-
-        <section class="room lounge" data-room="lounge">
-            <div class="room-label">
-                <i class="fas fa-mug-hot" aria-hidden="true"></i>
-                <span>Lounge</span>
-            </div>
-            <div class="furniture">
-                <div class="desk" style="top:35%; left:30%; width:35%; height:30%; background:#6b7280; border-radius:8px;"></div>
-                <div class="chair" style="top:20%; left:45%;"></div>
-                <div class="chair" style="top:75%; left:45%;"></div>
-            </div>
-        </section>
-
-        <!-- PART 8 + 9: Agents live in #workspace-map (NOT inside .room) -->
-        <div class="agent" id="agent-coordinator" data-role="Coordinator" data-room="meeting" title="Coordinator">
-            <span class="agent-emoji">&#129488;</span>
-            <span class="agent-name">Coord</span>
-        </div>
-        <div class="agent" id="agent-dev1" data-role="Developer" data-room="engineering" title="Developer 1">
-            <span class="agent-emoji">&#128104;&#8205;&#128187;</span>
-            <span class="agent-name">Dev 1</span>
-        </div>
-        <div class="agent" id="agent-dev2" data-role="Developer" data-room="engineering" title="Developer 2">
-            <span class="agent-emoji">&#128105;&#8205;&#128187;</span>
-            <span class="agent-name">Dev 2</span>
-        </div>
-        <div class="agent" id="agent-devops" data-role="DevOps" data-room="operations" title="DevOps">
-            <span class="agent-emoji">&#128736;</span>
-            <span class="agent-name">DevOps</span>
-        </div>
-        <div class="agent" id="agent-research" data-role="Researcher" data-room="research" title="Researcher">
-            <span class="agent-emoji">&#128218;</span>
-            <span class="agent-name">Research</span>
-        </div>
-        <div class="agent" id="agent-analyst" data-role="Analyst" data-room="research" title="Analyst">
-            <span class="agent-emoji">&#128202;</span>
-            <span class="agent-name">Analyst</span>
-        </div>
-        <div class="agent" id="agent-security" data-role="Security" data-room="operations" title="Security">
-            <span class="agent-emoji">&#128737;</span>
-            <span class="agent-name">Sec</span>
-        </div>
-
-        <!-- Status HUD overlay (does not block navbar) -->
-        <div class="hud" aria-live="polite">
-            <div class="hud-item">
-                <i class="fas fa-users" aria-hidden="true"></i>
-                <span><strong id="hud-agents">7</strong> agents</span>
-            </div>
-            <div class="hud-item">
-                <i class="fas fa-bolt" aria-hidden="true"></i>
-                <span><strong id="hud-tasks">12</strong> active tasks</span>
-            </div>
-            <div class="hud-item">
-                <i class="fas fa-heart-pulse" aria-hidden="true"></i>
-                <span><strong id="hud-uptime">98.5%</strong> uptime</span>
-            </div>
-        </div>
-    </main>
-
-    <script src="nixon-workspace.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Hermes Workspace</title>
+    <!-- The standalone NIXON workspace was rebuilt as a React app.
+         Its build output lives in /static/nixon-workspace/. We keep this
+         file as a redirect so existing bookmarks/links continue to work. -->
+    <meta http-equiv="refresh" content="0; url=nixon-workspace/index.html" />
+    <link rel="canonical" href="nixon-workspace/index.html" />
+    <script>
+      // Use replace() so the redirect doesn't pollute browser history.
+      window.location.replace('nixon-workspace/index.html');
+    </script>
+  </head>
+  <body>
+    <p>
+      Redirecting to
+      <a href="nixon-workspace/index.html">the new Hermes Workspace</a>.
+    </p>
+  </body>
 </html>
