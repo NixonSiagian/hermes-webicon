@@ -2,119 +2,192 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
-        user-scalable=no, viewport-fit=cover" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!--
+    MOBILE-FIRST viewport:
+    - initial-scale=1.0   → no forced zoom
+    - maximum-scale=1.0   → prevent iOS auto-zoom on input focus
+    - user-scalable=no    → disable pinch-zoom at OS level (PixiJS handles it)
+    - viewport-fit=cover  → stretch into notch / home-bar area
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
+                 user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable"             content="yes" />
+  <meta name="apple-mobile-web-app-capable"       content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0b0f1a" />
   <title>Hermes Workspace</title>
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ── Reset ───────────────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
+    /* ── Full-screen host ────────────────────────────────── */
     html, body {
-      width: 100%; height: 100%;
+      width: 100%;
+      height: 100%;
+      /* Use dvh so the canvas respects mobile browser chrome height */
+      height: 100dvh;
       overflow: hidden;
+      overscroll-behavior: none;
+      /* Disable touch scroll/zoom — PixiJS handles gestures */
       touch-action: none;
       background: #0b0f1a;
       font-family: 'Courier New', Courier, monospace;
+      /* Prevent iOS tap highlight flash */
       -webkit-tap-highlight-color: transparent;
+      /* Prevent font size inflation on rotation */
       -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
 
-    /* ── TOPBAR ── */
+    /* ── Fixed top HUD bar ───────────────────────────────── */
     #hud-topbar {
       position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 44px;
-      padding-top: env(safe-area-inset-top, 0);
+      top: 0;
+      left: 0;
+      right: 0;
+      /* Reserve space for iOS notch / status bar */
+      padding-top: env(safe-area-inset-top, 0px);
+      height: calc(44px + env(safe-area-inset-top, 0px));
       z-index: 9999;
       background: rgba(11, 15, 26, 0.96);
-      border-bottom: 1px solid rgba(0, 229, 204, 0.25);
+      border-bottom: 1px solid rgba(0, 229, 204, 0.22);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       display: flex;
-      align-items: center;
+      align-items: flex-end;        /* content sits at bottom of padded bar */
       justify-content: space-between;
-      padding-left: 14px;
-      padding-right: 14px;
+      padding-left: max(14px, env(safe-area-inset-left, 0px));
+      padding-right: max(14px, env(safe-area-inset-right, 0px));
+      padding-bottom: 6px;
       gap: 8px;
+      /* Do NOT intercept touch events meant for canvas below */
+      pointer-events: auto;
     }
+
     #hud-topbar-title {
-      font-size: 13px; font-weight: 700;
-      color: #00e5cc; letter-spacing: 2px;
-      text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #00e5cc;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
+
     #agent-count {
-      font-size: 10px; color: rgba(0,229,204,0.75);
-      white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis; flex: 1; text-align: center;
+      font-size: 10px;
+      color: rgba(0, 229, 204, 0.72);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      text-align: center;
+      min-width: 0;
     }
+
     #exit-btn {
-      flex-shrink: 0; padding: 5px 12px;
-      background: rgba(0,229,204,0.08);
-      border: 1px solid rgba(0,229,204,0.3);
-      border-radius: 5px; color: #00e5cc;
-      font-size: 12px; font-weight: 600;
-      font-family: inherit; cursor: pointer;
+      flex-shrink: 0;
+      padding: 5px 13px;
+      background: rgba(0, 229, 204, 0.08);
+      border: 1px solid rgba(0, 229, 204, 0.3);
+      border-radius: 5px;
+      color: #00e5cc;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
       letter-spacing: 0.5px;
       transition: background 0.15s;
+      /* Ensure taps register on mobile */
       touch-action: manipulation;
+      -webkit-appearance: none;
     }
-    #exit-btn:active { background: rgba(0,229,204,0.22); }
+    #exit-btn:hover   { background: rgba(0, 229, 204, 0.16); }
+    #exit-btn:active  { background: rgba(0, 229, 204, 0.24); }
 
-    /* ── CANVAS CONTAINER ── */
+    /* ── Canvas container ────────────────────────────────── */
     #workspace-container {
       position: fixed;
+      /* Start just below the HUD bar, accounting for notch */
       top: calc(44px + env(safe-area-inset-top, 0px));
-      left: 0; right: 0; bottom: 0;
+      left: 0;
+      right: 0;
+      /* Reach to the very bottom, leaving room for Android nav bar */
+      bottom: env(safe-area-inset-bottom, 0px);
       overflow: hidden;
       background: #0a0e17;
+      /* Canvas handles its own touch events via PixiJS */
       touch-action: none;
     }
+
+    /* Canvas element injected by PixiJS */
     #workspace-container canvas {
       display: block;
+      /* Fill container without distortion — PixiJS handles internal resolution */
       width: 100% !important;
       height: 100% !important;
+      /* Pixel-art crisp rendering */
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       touch-action: none;
     }
 
-    /* ── BOTTOM LABEL ── */
+    /* ── Bottom room label ───────────────────────────────── */
     #room-label {
       position: fixed;
-      bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-      left: 12px;
-      color: #7899aa; font-size: 9px;
-      background: rgba(10,14,23,0.88);
-      padding: 4px 9px; border-radius: 4px;
-      border: 1px solid rgba(0,229,204,0.15);
-      pointer-events: none; z-index: 100;
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      left: max(12px, env(safe-area-inset-left, 12px));
+      color: #7899aa;
+      font-size: 9px;
+      background: rgba(10, 14, 23, 0.88);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 229, 204, 0.14);
+      pointer-events: none;
+      z-index: 100;
       letter-spacing: 0.5px;
+    }
+
+    /* ── Mobile tweaks ───────────────────────────────────── */
+    @media (max-width: 480px) {
+      #hud-topbar-title { font-size: 11px; letter-spacing: 1.5px; }
+      #agent-count      { font-size: 9px; }
+      #exit-btn         { padding: 4px 10px; font-size: 11px; }
     }
   </style>
 </head>
 <body>
 
+  <!-- ── HUD top bar ── -->
   <div id="hud-topbar">
     <span id="hud-topbar-title">⚡ Hermes</span>
-    <span id="agent-count">Starting...</span>
+    <span id="agent-count">Starting…</span>
     <button id="exit-btn" onclick="exitWorkspace()">✕ Exit</button>
   </div>
 
+  <!-- ── PixiJS canvas is injected here ── -->
   <div id="workspace-container"></div>
 
-  <div id="room-label">Hermes 2D Office · Live Sim</div>
+  <!-- ── Bottom label ── -->
+  <div id="room-label">Hermes 2D Office · Grid Tilemap</div>
 
-  <!-- PixiJS 7 from jsdelivr.net (allowed by server CSP) -->
+  <!--
+    PixiJS 7 from jsDelivr CDN.
+    Allowed by the server's CSP (external scripts from cdn.jsdelivr.net).
+  -->
   <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
 
-  <!-- Main simulation — self-contained, never blocks -->
+  <!-- Main simulation — self-contained IIFE, never blocks render -->
   <script src="pixi-workspace.js"></script>
 
   <script>
+    /* ── Exit handler ── */
     function exitWorkspace() {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'workspace-close' }, '*');
@@ -122,8 +195,16 @@
         window.history.back();
       }
     }
-    document.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+    /* ── Prevent native scroll/zoom from fighting PixiJS ── */
+    document.addEventListener('touchmove',    function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturestart', function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('contextmenu',  function(e) { e.preventDefault(); });
+
+    /* ── Refit canvas on orientation change (iOS fires resize late) ── */
+    window.addEventListener('orientationchange', function() {
+      setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 300);
+    });
   </script>
 </body>
 </html>
