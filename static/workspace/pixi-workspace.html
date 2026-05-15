@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hermes 2D Workspace</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0f1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #workspace-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #workspace-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #workspace-hud {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            color: #00e5cc;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
+            text-shadow: 0 0 4px rgba(0, 229, 204, 0.4);
+        }
+
+        #workspace-hud h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        #workspace-hud p {
+            opacity: 0.7;
+            font-size: 12px;
+        }
+
+        #room-label {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            color: #ffffff;
+            font-size: 13px;
+            background: rgba(11, 15, 26, 0.85);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 229, 204, 0.3);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #agent-count {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            color: #00e5cc;
+            font-size: 13px;
+            background: rgba(11, 15, 26, 0.85);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 229, 204, 0.3);
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="workspace-container">
+        <!-- PixiJS canvas will be appended here -->
+    </div>
+
+    <div id="workspace-hud">
+        <h1>Hermes Workspace</h1>
+        <p>2D Office View</p>
+    </div>
+
+    <div id="room-label">Room: Overview</div>
+    <div id="agent-count">Agents: 0</div>
+
+    <!-- PixiJS CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+
+    <!-- Workspace Logic -->
+    <script src="pixi-workspace.js"></script>
+</body>
+</html>
